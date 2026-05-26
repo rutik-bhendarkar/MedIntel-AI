@@ -1,0 +1,13 @@
+{
+  "liveServer.settings.root": "/frontend",
+  "liveServer.settings.ignoreFiles": [
+    "**/backend/**",
+    "**/backend/uploads/**",
+    "**/backend/report_outputs/**",
+    "**/*.pdf",
+    "**/*.png",
+    "**/*.jpg",
+    "**/*.jpeg",
+    "**/*.txt"
+  ]
+}

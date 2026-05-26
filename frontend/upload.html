@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Report Intelligence | MedIntel AI</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/theme.js" defer></script>
+    <script src="js/upload.js?v=4" defer></script>
+</head>
+
+<body>
+    <div class="app-shell">
+        <aside class="app-sidebar">
+            <a class="app-brand" href="index.html" aria-label="MedIntel AI home">
+                <span class="brand-mark">MI</span>
+                <span>
+                    <strong>MedIntel AI</strong>
+                    <small>Healthcare Intelligence</small>
+                </span>
+            </a>
+
+            <div class="theme-switcher">
+                <button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle theme">Dark</button>
+            </div>
+
+            <nav class="app-nav" aria-label="Main navigation">
+                <a href="index.html">Chat Bot</a>
+                <a class="active" href="upload.html">Analyze Report</a>
+                <a href="reports.html">Reports</a>
+                <a href="dashboard.html">Dashboard</a>
+                <a href="profile.html">Profile</a>
+            </nav>
+        </aside>
+
+        <main class="app-main">
+            <section class="page-hero">
+                <div>
+                    <p class="eyebrow">MedIntel AI report intelligence</p>
+                    <h1>Analyze Medical Report</h1>
+                    <p>Upload a PDF or image report and review structured findings, abnormal markers, patient-friendly guidance, and practical next steps.</p>
+                </div>
+                <a class="btn secondary" href="reports.html">View All Reports</a>
+            </section>
+
+            <section class="analyzer-grid">
+                <div class="card upload-panel">
+                    <div class="section-title">
+                        <div>
+                            <p class="eyebrow">Step 1</p>
+                            <h2>Select report file</h2>
+                        </div>
+                        <span class="soft-pill">PDF, JPG, PNG</span>
+                    </div>
+
+                    <div class="upload-box">
+                        <label for="reportFile" class="file-label">Choose a medical report</label>
+                        <input id="reportFile" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">
+                        <p id="selectedFileName" class="selected-file">No file selected</p>
+                    </div>
+
+                    <div class="button-row">
+                        <button id="analyzeButton" class="btn primary" type="button">Analyze Report</button>
+                        <button id="clearResultsButton" class="btn secondary" type="button">Clear Results</button>
+                    </div>
+
+                    <p id="uploadStatus" class="status-message" aria-live="polite"></p>
+                </div>
+
+                <aside class="card recent-panel">
+                    <div class="section-title">
+                        <div>
+                            <p class="eyebrow">Recent activity</p>
+                            <h2>Recent Reports</h2>
+                        </div>
+                        <button id="refreshRecentButton" class="btn secondary small" type="button">Refresh</button>
+                    </div>
+
+                    <label for="recentSearch" class="input-label">Filter by report type</label>
+                    <input id="recentSearch" class="text-input full" type="search" placeholder="Example: diabetes">
+                    <p id="recentStatus" class="status-message compact" aria-live="polite"></p>
+
+                    <div id="recentReportsList" class="recent-list">
+                        <p class="empty-state">Loading recent reports...</p>
+                    </div>
+                </aside>
+            </section>
+
+            <section id="emptyResult" class="card empty-result">
+                <p class="eyebrow">Report summary</p>
+                <h2>No analysis yet</h2>
+                <p>Select a report and click Analyze Report. The readable summary, risk badge, findings, recommendations, and JSON details will appear here without reloading the page.</p>
+            </section>
+
+            <section id="resultSection" class="card summary-dashboard hidden" aria-live="polite">
+                <div class="section-title">
+                    <div>
+                        <p class="eyebrow">MedIntel AI analysis</p>
+                        <h2>Report Intelligence Summary</h2>
+                    </div>
+                    <div class="button-row">
+                        <button id="copySummaryButton" class="btn secondary small" type="button">Copy Summary</button>
+                        <button id="downloadSummaryButton" class="btn secondary small" type="button">Download TXT</button>
+                        <button id="downloadPdfButton" class="btn secondary small" type="button">Download PDF</button>
+                    </div>
+                </div>
+
+                <div class="summary-header">
+                    <div class="summary-highlight">
+                        <span id="riskBadge" class="badge neutral">Not analyzed</span>
+                        <p id="summaryMessage" class="summary-message">Upload a report to begin.</p>
+                    </div>
+                    <div class="summary-meta">
+                        <span>Report Type</span>
+                        <strong id="reportType">-</strong>
+                    </div>
+                    <div class="summary-meta">
+                        <span>Uploaded File</span>
+                        <strong id="uploadedFileName">-</strong>
+                    </div>
+                    <div class="summary-meta">
+                        <span>Analyzed At</span>
+                        <strong id="uploadedAtValue">-</strong>
+                    </div>
+                </div>
+
+                <div id="nextStepsBlock" class="recommendation-hero hidden">
+                    <div>
+                        <p class="eyebrow">What to do next</p>
+                        <h3 id="topRecommendationText">Review your results</h3>
+                        <p id="topRecommendationReason">MedIntel AI will surface the most important next step here.</p>
+                    </div>
+                    <span id="confidenceScoreBadge" class="confidence-badge">0%</span>
+                </div>
+
+                <div id="emergencyAlert" class="alert-card hidden">
+                    <strong>Emergency Alert</strong>
+                    <p id="emergencyAlertText"></p>
+                </div>
+
+                <div id="summaryTextBlock" class="summary-text hidden">
+                    <h3>Patient-friendly summary</h3>
+                    <p id="summaryText"></p>
+                </div>
+
+                <div id="doctorSummaryBlock" class="summary-text hidden">
+                    <h3>Doctor-friendly summary</h3>
+                    <p id="doctorSummaryText"></p>
+                </div>
+
+                <div id="aiInterpretationBlock" class="summary-text hidden">
+                    <h3>AI medical interpretation</h3>
+                    <p id="aiInterpretationText"></p>
+                </div>
+
+                <div class="grid two-column summary-lists">
+                    <div class="summary-list-card">
+                        <h3>Findings</h3>
+                        <ul id="findingsList" class="clean-list">
+                            <li>No findings yet.</li>
+                        </ul>
+                    </div>
+
+                    <div class="summary-list-card">
+                        <h3>Recommendations</h3>
+                        <ul id="recommendationsList" class="clean-list">
+                            <li>No recommendations yet.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div id="warningSignalsBlock" class="alert-card hidden">
+                    <strong>Warning / Emergency Signals</strong>
+                    <ul id="warningSignalsList" class="clean-list"></ul>
+                </div>
+
+                <div id="followUpBlock" class="summary-list-card hidden">
+                    <h3>Follow-up suggestions</h3>
+                    <ul id="followUpList" class="clean-list"></ul>
+                </div>
+
+                <div id="labAnalysisBlock" class="lab-analysis-block hidden">
+                    <div class="section-title compact-title">
+                        <div>
+                            <p class="eyebrow">Structured lab review</p>
+                            <h3>Detected values</h3>
+                        </div>
+                    </div>
+                    <div id="labAnalysisList" class="lab-analysis-grid"></div>
+                </div>
+
+                <details class="json-details">
+                    <summary>Raw JSON Response</summary>
+                    <pre id="rawJson" class="json-block">No response yet.</pre>
+                </details>
+            </section>
+        </main>
+    </div>
+</body>
+
+</html>

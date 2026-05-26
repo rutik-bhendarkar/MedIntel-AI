@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Report History | MedIntel AI</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/theme.js" defer></script>
+    <script src="js/reports.js" defer></script>
+</head>
+
+<body>
+    <div class="app-shell">
+        <aside class="app-sidebar">
+            <a class="app-brand" href="index.html" aria-label="MedIntel AI home">
+                <span class="brand-mark">MI</span>
+                <span>
+                    <strong>MedIntel AI</strong>
+                    <small>Healthcare Intelligence</small>
+                </span>
+            </a>
+
+            <div class="theme-switcher">
+                <button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle theme">Dark</button>
+            </div>
+
+            <nav class="app-nav" aria-label="Main navigation">
+                <a href="index.html">Chat Bot</a>
+                <a href="upload.html">Analyze Report</a>
+                <a class="active" href="reports.html">Reports</a>
+                <a href="dashboard.html">Dashboard</a>
+                <a href="profile.html">Profile</a>
+            </nav>
+        </aside>
+
+        <main class="app-main">
+            <section class="page-hero">
+                <div>
+                    <p class="eyebrow">MedIntel AI report intelligence</p>
+                    <h1>Report History</h1>
+                    <p>Search saved reports, review structured interpretations, compare risk signals, and act on clear recommendations.</p>
+                </div>
+                <a class="btn primary" href="upload.html">Analyze New Report</a>
+            </section>
+
+            <section class="card">
+                <div class="toolbar">
+                    <div>
+                        <label for="typeSearch" class="input-label">Search by report type</label>
+                        <input id="typeSearch" class="text-input" type="search" placeholder="Example: diabetes">
+                    </div>
+                    <button id="refreshButton" class="btn secondary" type="button">Refresh</button>
+                </div>
+
+                <p id="reportsStatus" class="status-message" aria-live="polite"></p>
+
+                <div id="reportsCardList" class="report-list-grid">
+                    <p class="empty-state">Loading reports...</p>
+                </div>
+
+                <details class="json-details table-details">
+                    <summary>Compact table view</summary>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Report Name</th>
+                                    <th>Report Type</th>
+                                    <th>Risk Level</th>
+                                    <th>Uploaded At</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reportsTableBody">
+                                <tr>
+                                    <td colspan="6" class="empty-state">Loading reports...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+            </section>
+
+            <section id="detailPanel" class="card detail-panel hidden" aria-live="polite">
+                <div class="section-title">
+                    <div>
+                        <p class="eyebrow">Structured interpretation</p>
+                        <h2 id="detailTitle">Selected Report</h2>
+                    </div>
+                    <div class="button-row">
+                        <button id="downloadDetailPdfButton" class="btn secondary" type="button">Download PDF</button>
+                        <button id="closeDetailButton" class="btn secondary" type="button">Close</button>
+                    </div>
+                </div>
+
+                <div id="detailContent" class="report-detail-sections"></div>
+                <div id="detailLabAnalysis" class="lab-analysis-block hidden"></div>
+                <pre id="detailRawJson" class="json-block">No report selected.</pre>
+            </section>
+        </main>
+    </div>
+</body>
+
+</html>
