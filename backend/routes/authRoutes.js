@@ -39,5 +39,19 @@ router.post("/password/reset", resetPassword);
 
 // POST /api/auth/logout
 router.post("/logout", authMiddleware, logoutUser);
+const express = require("express");
+
+const router = express.Router();
+
+const {
+  signup,
+  login,
+} = require("../controllers/authController");
+
+router.post("/signup", signup);
+
+router.post("/login", login);
+
 
 module.exports = router;
+
