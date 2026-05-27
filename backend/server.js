@@ -1,8 +1,9 @@
 const express = require("express");
 const cors = require("cors");
-const pool = require("./config/db");
-// const mysql = require("mysql2");
 require("dotenv").config();
+
+const db = require("./config/db");
+global.db = db;
 
 const authRoutes = require("./routes/authRoutes");
 const reportRoutes = require("./routes/reportRoutes");
@@ -10,95 +11,54 @@ const chatRoutes = require("./routes/chatRoutes");
 
 const app = express();
 
-// =====================================
-// DATABASE CONNECTION
-// =====================================
-try {
-    const db = mysql.createConnection({
-        host: process.env.DB_HOST || "localhost",
-        user: process.env.DB_USER || "root",
-        password: process.env.DB_PASSWORD || "",
-        database: process.env.DB_NAME || "healthcare_ai_platform"
-    });
-
-    db.connect((err) => {
-        if (err) {
-            console.log("MySQL Connection Failed");
-            console.log(err.message);
-        } else {
-            console.log("MySQL Connected Successfully");
-        }
-    });
-
-    global.db = db;
-} catch (error) {
-    console.log("Database Setup Error");
-    console.log(error.message);
-}
-
-// =====================================
-// MIDDLEWARE
-// =====================================
+// Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// =====================================
-// STATIC FOLDERS
-// =====================================
+// Static folders
 app.use("/uploads", express.static("uploads"));
 app.use("/report_outputs", express.static("report_outputs"));
 
-// =====================================
-// ROOT ROUTES
-// =====================================
+// Root
 app.get("/", (req, res) => {
-    res.send("MedIntel AI Backend Running");
+  res.send("MedIntel AI Backend Running");
 });
 
 app.get("/health", (req, res) => {
-    res.json({
-        success: true,
-        status: "ok",
-        service: "MedIntel AI Backend"
-    });
+  res.json({
+    success: true,
+    status: "ok",
+    service: "MedIntel AI Backend",
+  });
 });
 
-// =====================================
-// API ROUTES
-// =====================================
+// Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/report", reportRoutes);
 app.use("/api/chat", chatRoutes);
 
-// =====================================
-// 404 HANDLER
-// =====================================
+// 404
 app.use((req, res) => {
-    res.status(404).json({
-        success: false,
-        message: "Route Not Found"
-    });
+  res.status(404).json({
+    success: false,
+    message: "Route Not Found",
+  });
 });
 
-// =====================================
-// ERROR HANDLER
-// =====================================
+// Error handler
 app.use((error, req, res, next) => {
-    console.log("Server Error:");
-    console.log(error);
+  console.log("Server Error:");
+  console.log(error);
 
-    res.status(500).json({
-        success: false,
-        message: "Internal Server Error"
-    });
+  res.status(500).json({
+    success: false,
+    message: "Internal Server Error",
+  });
 });
 
-// =====================================
-// SERVER
-// =====================================
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });

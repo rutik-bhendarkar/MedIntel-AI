@@ -4,7 +4,7 @@ const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 
 // Use the global db created in server.js, with fallback for direct imports.
-const db = global.db || require("../config/db");
+const pool = global.db || require("../config/db");
 
 let userColumnsCache = null;
 let resetTableReady = false;
