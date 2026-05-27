@@ -3,7 +3,6 @@ const cors = require("cors");
 require("dotenv").config();
 
 
-global.db = db;
 
 const authRoutes = require("./routes/authRoutes");
 const reportRoutes = require("./routes/reportRoutes");
