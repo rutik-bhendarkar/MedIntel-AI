@@ -11,7 +11,7 @@ let resetTableReady = false;
 
 function query(sql, params = []) {
     return new Promise((resolve, reject) => {
-        db.query(sql, params, (err, results) => {
+        pool.query(sql, params, (err, results) => {
             if (err) {
                 reject(err);
                 return;
@@ -299,7 +299,7 @@ exports.registerUser = async (req, res) => {
             VALUES (?, ?, ?, ?, ?)
         `;
 
-        db.query(
+        pool.query(
             sql,
             [
                 cleanName,

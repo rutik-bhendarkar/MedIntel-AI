@@ -4,7 +4,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const { spawn } = require("child_process");
-const db = require("../config/db");
+const pool = require("../config/db");
 const authMiddleware = require("../middleware/authMiddleware");
 const { generateSummaryPdf } = require("../utils/pdfGenerator");
 const { analyzeReport } = require("../services/reportAnalyzer");
@@ -386,7 +386,7 @@ const analyzeUploadedReport = (req, res) => {
             VALUES (?, ?, ?, ?, ?, ?, NOW())
         `;
 
-        db.query(sql, [userId, reportName, reportType, riskLevel, findings, enhancedAnalysis.recommendations.join("; ")], (dbErr, dbResult) => {
+        pool.query(sql, [userId, reportName, reportType, riskLevel, findings, enhancedAnalysis.recommendations.join("; ")], (dbErr, dbResult) => {
             if (dbErr) {
                 return res.status(500).json({
                     success: false,
@@ -438,7 +438,7 @@ router.get("/:id/pdf", authMiddleware, (req, res) => {
           AND user_id = ?
     `;
 
-    db.query(sql, [req.params.id, req.user.id], (err, results) => {
+    pool.query(sql, [req.params.id, req.user.id], (err, results) => {
         if (err) {
             return res.status(500).json({ message: "Database Error" });
         }

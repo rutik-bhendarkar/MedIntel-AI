@@ -6,7 +6,7 @@ const {
     generateReportInsights
 } = require("../services/geminiService");
 
-const db = require("../config/db");
+const pool = require("../config/db");
 
 function getAuthenticatedUserId(req, res) {
     const userId = req.user?.id;
@@ -497,7 +497,7 @@ exports.getAllReports = (req, res) => {
         ORDER BY uploaded_at DESC, id DESC
     `;
 
-    db.query(sql, [userId], async (err, results) => {
+    pool.query(sql, [userId], async (err, results) => {
         if (err) {
             console.log(err);
             return res.status(500).json({
@@ -541,7 +541,7 @@ exports.getSingleReport = (req, res) => {
           AND user_id = ?
     `;
 
-    db.query(sql, [reportId, userId], async (err, results) => {
+    pool.query(sql, [reportId, userId], async (err, results) => {
         if (err) {
             console.log(err);
             return res.status(500).json({
@@ -590,7 +590,7 @@ exports.deleteReport = (req, res) => {
           AND user_id = ?
     `;
 
-    db.query(sql, [reportId, userId], (err, result) => {
+    pool.query(sql, [reportId, userId], (err, result) => {
         if (err) {
             console.log(err);
             return res.status(500).json({
@@ -637,7 +637,7 @@ exports.searchReports = (req, res) => {
         ORDER BY uploaded_at DESC, id DESC
     `;
 
-    db.query(sql, [userId, `%${reportType}%`], async (err, results) => {
+    pool.query(sql, [userId, `%${reportType}%`], async (err, results) => {
         if (err) {
             console.log(err);
             return res.status(500).json({
