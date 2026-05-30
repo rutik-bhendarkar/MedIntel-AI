@@ -6,7 +6,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const rememberMe = document.getElementById("rememberMe");
     const loginButton = loginForm.querySelector(".auth-btn");
 
-    const API_URL = "http://localhost:5000/api/auth/login";
+    const API_URL = "https://medintel-backend.onrender.com";
 
     const existingToken = localStorage.getItem("token");
     if (existingToken) {
