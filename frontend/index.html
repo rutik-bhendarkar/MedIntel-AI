@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8" />
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0" />
+
+    <title>
+        MedIntel AI | Home
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="css/style.css" />
+
+    <script
+        src="js/theme.js"
+        defer>
+    </script>
+
+    <script
+        src="js/chatbot.js"
+        defer>
+    </script>
+
+</head>
+
+<body>
+
+    <div class="app-shell">
+
+        <!-- SIDEBAR -->
+
+        <aside class="app-sidebar">
+
+            <a
+                class="app-brand"
+                href="index.html"
+                aria-label="MedIntel AI home">
+
+                <span class="brand-mark">
+                    MI
+                </span>
+
+                <span class="brand-copy">
+
+                    <strong>
+                        MedIntel AI
+                    </strong>
+
+                    <small>
+                        Healthcare Intelligence
+                    </small>
+
+                </span>
+
+            </a>
+
+            <button
+                id="themeToggle"
+                class="theme-toggle"
+                type="button">
+
+                Light
+
+            </button>
+
+            <nav
+                class="app-nav"
+                aria-label="Main navigation">
+
+                <a
+                    class="active"
+                    href="index.html">
+
+                    Chat Bot
+
+                </a>
+
+                <a href="upload.html">
+                    Analyze Report
+                </a>
+
+                <a href="reports.html">
+                    Reports
+                </a>
+
+                <a href="dashboard.html">
+                    Dashboard
+                </a>
+
+                <a href="profile.html">
+                    Profile
+                </a>
+
+            </nav>
+
+        </aside>
+
+        <!-- MAIN -->
+
+        <main class="app-main">
+
+            <!-- HERO -->
+
+            <section class="page-hero compact">
+
+                <div>
+
+                    <p class="eyebrow">
+                        Adaptive Health Support
+                    </p>
+
+                    <h1>
+                        MedIntel AI Assistant
+                    </h1>
+
+                    <p>
+                        Ask about symptoms, track how they change,
+                        and review cautious AI reasoning alongside
+                        your latest report context.
+                    </p>
+
+                </div>
+
+                <div class="hero-actions">
+
+                    <span
+                        id="urgencyBadge"
+                        class="urgency-badge calm">
+
+                        Monitoring
+
+                    </span>
+
+                    <button
+                        id="resetChatButton"
+                        type="button"
+                        class="btn secondary">
+
+                        Reset Chat
+
+                    </button>
+
+                </div>
+
+            </section>
+
+            <!-- EMERGENCY -->
+
+            <div
+                id="emergencyBanner"
+                class="chat-emergency-banner hidden"
+                role="alert"
+                aria-live="assertive">
+
+                <strong>
+                    Emergency:
+                </strong>
+
+                <span id="emergencyText"></span>
+
+            </div>
+
+            <!-- MAIN GRID -->
+
+            <div class="chat-dashboard-grid">
+
+                <!-- CHAT -->
+
+                <section class="card chat-card">
+
+                    <div class="section-title">
+
+                        <div>
+
+                            <p class="eyebrow">
+                                Conversation
+                            </p>
+
+                            <h2>
+                                Smart symptom chat
+                            </h2>
+
+                        </div>
+
+                        <span class="soft-pill">
+                            Session memory on
+                        </span>
+
+                    </div>
+
+                    <div
+                        id="chatMessages"
+                        class="chat-messages"
+                        aria-live="polite">
+
+                    </div>
+
+                    <div
+                        id="followUpChips"
+                        class="follow-up-container hidden">
+
+                    </div>
+
+                    <form
+                        id="chatForm"
+                        class="chat-input-box">
+
+                        <input
+                            id="chatInput"
+                            type="text"
+                            placeholder="Describe symptoms, duration, severity, or changes..."
+                            autocomplete="off" />
+
+                        <div
+                            id="loadingIndicator"
+                            class="loading-text hidden">
+
+                            <span
+                                class="spinner"
+                                aria-hidden="true">
+
+                            </span>
+
+                            Thinking
+
+                        </div>
+
+                        <button
+                            id="sendButton"
+                            type="submit">
+
+                            Send
+
+                        </button>
+
+                        <button
+                            id="voiceButton"
+                            type="button"
+                            class="btn secondary">
+
+                            Voice
+
+                        </button>
+
+                        <p
+                            id="voiceStatus"
+                            class="voice-status"
+                            aria-live="polite">
+
+                        </p>
+
+                    </form>
+
+                </section>
+
+                <!-- RIGHT SIDE -->
+
+                <aside class="assistant-panels">
+
+                    <!-- EXPLAINABLE AI -->
+
+                    <section class="card insight-card">
+
+                        <div class="section-title">
+
+                            <div>
+
+                                <p class="eyebrow">
+                                    Explainable AI
+                                </p>
+
+                                <h2>
+                                    Why this response
+                                </h2>
+
+                            </div>
+
+                            <span
+                                id="explanationConfidence"
+                                class="confidence-badge">
+
+                                0%
+
+                            </span>
+
+                        </div>
+
+                        <div
+                            id="explanationConfidenceMeter"
+                            class="confidence-meter"
+                            role="meter"
+                            aria-valuemin="0"
+                            aria-valuemax="100"
+                            aria-valuenow="0"
+                            aria-label="AI confidence">
+
+                            <span
+                                id="explanationConfidenceFill">
+
+                            </span>
+
+                        </div>
+
+                        <div class="info-grid">
+
+                            <div class="metric-tile">
+
+                                <span class="info-label">
+                                    Detected Symptoms
+                                </span>
+
+                                <strong id="explanationSymptoms">
+                                    None yet.
+                                </strong>
+
+                            </div>
+
+                            <div class="metric-tile">
+
+                                <span class="info-label">
+                                    Symptom Group
+                                </span>
+
+                                <strong id="explanationGroup">
+                                    Unclear
+                                </strong>
+
+                            </div>
+
+                            <div class="metric-tile">
+
+                                <span class="info-label">
+                                    Matched Patterns
+                                </span>
+
+                                <strong id="explanationPatterns">
+                                    None yet.
+                                </strong>
+
+                            </div>
+
+                            <div class="metric-tile">
+
+                                <span class="info-label">
+                                    Risk Level
+                                </span>
+
+                                <strong
+                                    id="explanationRisk"
+                                    class="risk-chip low">
+
+                                    Low
+
+                                </strong>
+
+                            </div>
+
+                        </div>
+
+                        <div class="reason-stack">
+
+                            <div>
+
+                                <span class="info-label">
+                                    Top-3 Thinking
+                                </span>
+
+                                <ol
+                                    id="topThinkingList"
+                                    class="compact-list">
+
+                                    <li>
+                                        No symptom pattern yet.
+                                    </li>
+
+                                </ol>
+
+                                <div class="prediction-card">
+
+                                    <h3>
+                                        Disease Probability Analysis
+                                    </h3>
+
+                                    <div id="probabilityContainer">
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                            <div>
+
+                                <span class="info-label">
+                                    Confidence Gap
+                                </span>
+
+                                <p id="confidenceGapText">
+                                    More detail will narrow the possibilities.
+                                </p>
+
+                            </div>
+
+                            <div>
+
+                                <span class="info-label">
+                                    Follow-up Reason
+                                </span>
+
+                                <p id="followUpReason">
+                                    I will ask only when important context is missing.
+                                </p>
+
+                            </div>
+
+                            <div>
+
+                                <span class="info-label">
+                                    Emergency Reason
+                                </span>
+
+                                <p id="emergencyReason">
+                                    No emergency pattern detected yet.
+                                </p>
+
+                            </div>
+
+                            <div>
+
+                                <span class="info-label">
+                                    Reasoning Summary
+                                </span>
+
+                                <p id="explanationReason">
+                                    Share symptoms, duration, severity,
+                                    and progression to improve guidance.
+                                </p>
+
+                            </div>
+
+                        </div>
+
+                    </section>
+
+                    <!-- TIMELINE -->
+
+                    <section class="card context-card">
+
+                        <div class="section-title">
+
+                            <div>
+
+                                <p class="eyebrow">
+                                    Timeline
+                                </p>
+
+                                <h2>
+                                    Symptom evolution
+                                </h2>
+
+                            </div>
+
+                            <span class="soft-pill">
+                                Tracked in session
+                            </span>
+
+                        </div>
+
+                        <div
+                            id="timelineList"
+                            class="timeline-list">
+
+                            <p class="empty-state">
+                                No symptom updates yet.
+                            </p>
+
+                        </div>
+
+                    </section>
+
+                    <!-- RECOMMENDATIONS FIRST -->
+
+                    <section class="card summary-list-card">
+
+                        <div class="section-title">
+
+                            <div>
+
+                                <p class="eyebrow">
+                                    Recommendations
+                                </p>
+
+                                <h2>
+                                    Suggested next steps
+                                </h2>
+
+                            </div>
+
+                        </div>
+
+                        <div
+                            id="futureForecast"
+                            class="future-forecast-wrapper">
+
+                            <div class="recommendation-box">
+
+                                <p class="empty-state">
+                                    Describe symptoms to get context-aware guidance.
+                                </p>
+
+                            </div>
+
+                        </div>
+
+                    </section>
+
+                    <!-- REPORT CONTEXT BELOW -->
+
+                    <section class="card context-card">
+
+                        <div class="section-title">
+
+                            <div>
+
+                                <p class="eyebrow">
+                                    Report Context
+                                </p>
+
+                                <h2>
+                                    Latest report link
+                                </h2>
+
+                            </div>
+
+                        </div>
+
+                        <div id="reportContextStatus">
+
+                            <div class="report-context-box">
+
+                                <h3>
+                                    diabetes, heart, cbc
+                                </h3>
+
+                                <div class="risk-bar high-risk">
+                                    High risk
+                                </div>
+
+                                <p>
+                                    File:
+                                    1779814693126_Cardio-Sample-Report.pdf
+                                </p>
+
+                                <p>
+                                    MedIntel AI could not extract structured
+                                    lab values from this report, but the saved
+                                    findings and risk level still provide
+                                    context for a clinician review.
+                                </p>
+
+                            </div>
+
+                        </div>
+
+                    </section>
+
+                </aside>
+
+            </div>
+
+        </main>
+
+    </div>
+
+</body>
+
+</html>

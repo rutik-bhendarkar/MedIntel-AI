@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile | MedIntel AI</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/theme.js" defer></script>
+    <script src="js/profile.js" defer></script>
+</head>
+
+<body>
+    <div class="app-shell">
+        <aside class="app-sidebar">
+            <a class="app-brand" href="index.html" aria-label="MedIntel AI home">
+                <span class="brand-mark">MI</span>
+                <span>
+                    <strong>MedIntel AI</strong>
+                    <small>Healthcare Intelligence</small>
+                </span>
+            </a>
+
+            <div class="theme-switcher">
+                <button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle theme">Dark</button>
+            </div>
+
+            <nav class="app-nav" aria-label="Main navigation">
+                <a href="index.html">Chat Bot</a>
+                <a href="upload.html">Analyze Report</a>
+                <a href="reports.html">Reports</a>
+                <a href="dashboard.html">Dashboard</a>
+                <a class="active" href="profile.html">Profile</a>
+            </nav>
+        </aside>
+
+        <main class="app-main">
+            <section class="page-hero compact">
+                <div>
+                    <p class="eyebrow">Account center</p>
+                    <h1>Your Profile</h1>
+                    <p>Review account details, health preferences, and security settings for your MedIntel AI workspace.</p>
+                </div>
+                <button id="profileLogoutButton" class="btn secondary" type="button">Logout</button>
+            </section>
+
+            <p id="profilePageStatus" class="status-message" aria-live="polite">Loading profile...</p>
+
+            <section class="profile-layout">
+                <article class="card profile-summary-card">
+                    <div class="profile-summary-top">
+                        <div id="profileAvatar" class="profile-avatar">U</div>
+                        <div>
+                            <p class="eyebrow">Logged-in user</p>
+                            <h2 id="profileDisplayName">-</h2>
+                            <div class="profile-email-row">
+                                <span id="profileDisplayEmail">-</span>
+                                <button id="copyProfileEmailButton" class="btn secondary small" type="button">Copy</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="profile-badge-row">
+                        <span id="profileVerificationBadge" class="risk-chip neutral">Unverified</span>
+                        <span id="profileAccountStatus" class="soft-pill">Active</span>
+                    </div>
+
+                    <div class="profile-meta-grid">
+                        <div class="detail-item">
+                            <span>Age</span>
+                            <strong id="profileAgeValue">-</strong>
+                        </div>
+                        <div class="detail-item">
+                            <span>Gender</span>
+                            <strong id="profileGenderValue">-</strong>
+                        </div>
+                        <div class="detail-item">
+                            <span>Joined</span>
+                            <strong id="profileJoinedValue">-</strong>
+                        </div>
+                        <div class="detail-item">
+                            <span>Last Login</span>
+                            <strong id="profileLastLoginValue">-</strong>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="card">
+                    <div class="section-title">
+                        <div>
+                            <p class="eyebrow">Settings</p>
+                            <h2>Edit profile</h2>
+                        </div>
+                    </div>
+
+                    <form id="profileForm" class="profile-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="profileFullName">Full Name</label>
+                                <input id="profileFullName" type="text" autocomplete="name" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="profileEmail">Email Address</label>
+                                <input id="profileEmail" type="email" autocomplete="email" disabled>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="profileAge">Age</label>
+                                <input id="profileAge" type="number" min="0" max="130">
+                            </div>
+                            <div class="form-group">
+                                <label for="profileGender">Gender</label>
+                                <select id="profileGender">
+                                    <option value="">Select</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Other">Other</option>
+                                    <option value="Prefer not to say">Prefer not to say</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="profileThemePreference">Theme Preference</label>
+                                <select id="profileThemePreference">
+                                    <option value="light">Light</option>
+                                    <option value="dark">Dark</option>
+                                    <option value="system">System</option>
+                                </select>
+                            </div>
+                            <div class="profile-toggle-stack">
+                                <label class="profile-toggle">
+                                    <input id="profileNotifications" type="checkbox">
+                                    <span>Notifications</span>
+                                </label>
+                                <label class="profile-toggle">
+                                    <input id="profileMedicalReminders" type="checkbox">
+                                    <span>Medical reminders</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="profileChronicConditions">Chronic Conditions</label>
+                            <textarea id="profileChronicConditions" rows="3" placeholder="Example: diabetes, asthma"></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="profileAllergies">Allergies</label>
+                            <textarea id="profileAllergies" rows="3" placeholder="Example: penicillin, peanuts"></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="profileEmergencyContact">Emergency Contact</label>
+                            <input id="profileEmergencyContact" type="text" placeholder="Name and phone number">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="profileMedicalHistory">Medical History Summary</label>
+                            <textarea id="profileMedicalHistory" rows="4" placeholder="Short notes that may help personalize guidance"></textarea>
+                        </div>
+
+                        <div class="button-row">
+                            <button id="saveProfileButton" class="btn primary" type="submit">Save Profile</button>
+                            <button id="resetProfileButton" class="btn secondary" type="button">Reset</button>
+                        </div>
+                    </form>
+                </article>
+            </section>
+
+            <section id="security" class="grid two-column">
+                <article class="card">
+                    <div class="section-title">
+                        <div>
+                            <p class="eyebrow">Security</p>
+                            <h2>Change password</h2>
+                        </div>
+                    </div>
+
+                    <form id="changePasswordForm" class="profile-form">
+                        <div class="form-group">
+                            <label for="currentPassword">Current Password</label>
+                            <input id="currentPassword" type="password" autocomplete="current-password" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="newPassword">New Password</label>
+                            <input id="newPassword" type="password" autocomplete="new-password" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="confirmNewPassword">Confirm New Password</label>
+                            <input id="confirmNewPassword" type="password" autocomplete="new-password" required>
+                        </div>
+                        <button id="changePasswordButton" class="btn primary" type="submit">Change Password</button>
+                    </form>
+                    <p id="changePasswordStatus" class="status-message compact" aria-live="polite"></p>
+                </article>
+
+                <article class="card">
+                    <div class="section-title">
+                        <div>
+                            <p class="eyebrow">Recovery</p>
+                            <h2>Forgot password</h2>
+                        </div>
+                    </div>
+
+                    <p class="settings-copy">Use email OTP recovery if you cannot remember the current password.</p>
+                    <a id="forgotPasswordLink" class="btn secondary" href="reset-password.html">Open Reset Flow</a>
+
+                    <div class="account-danger-zone">
+                        <p class="eyebrow">Account</p>
+                        <h3>Deactivate account</h3>
+                        <p>Deactivation signs you out and blocks future login until the account is restored in the database.</p>
+                        <button id="deactivateAccountButton" class="btn danger" type="button">Deactivate Account</button>
+                        <p id="deactivateStatus" class="status-message compact" aria-live="polite"></p>
+                    </div>
+                </article>
+            </section>
+        </main>
+    </div>
+</body>
+
+</html>

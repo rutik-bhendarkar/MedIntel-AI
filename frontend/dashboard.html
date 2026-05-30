@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | MedIntel AI</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/theme.js" defer></script>
+    <script src="js/dashboard.js" defer></script>
+</head>
+
+<body>
+    <div class="app-shell">
+        <aside class="app-sidebar">
+
+            <!-- BRAND -->
+
+            <a class="app-brand"
+               href="index.html"
+               aria-label="MedIntel AI home">
+
+                <span class="brand-mark">
+                    MI
+                </span>
+
+                <span class="brand-copy">
+
+                    <strong>
+                        MedIntel AI
+                    </strong>
+
+                    <small>
+                        Healthcare Intelligence
+                    </small>
+
+                </span>
+
+            </a>
+
+            <!-- DARK MODE BUTTON -->
+
+            <button
+                id="themeToggle"
+                class="theme-toggle"
+                type="button">
+
+                Light
+
+            </button>
+
+            <!-- PROFILE -->
+
+            <div class="sidebar-profile">
+
+                <button
+                    id="dashboardProfileButton"
+                    class="sidebar-profile-button"
+                    type="button">
+
+                    <span
+                        id="dashboardProfileInitials"
+                        class="sidebar-avatar">
+
+                        R
+
+                    </span>
+
+                    <span class="sidebar-profile-text">
+
+                        <strong id="dashboardProfileName">
+                            Rutik
+                        </strong>
+
+                        <small id="dashboardProfileEmail">
+                            rutikbhendarkar07@gmail.com
+                        </small>
+
+                    </span>
+
+                </button>
+
+                <!-- DROPDOWN -->
+
+                <div
+                    id="dashboardProfileMenu"
+                    class="profile-dropdown hidden">
+
+                    <a href="profile.html">
+                        View Profile
+                    </a>
+
+                    <a href="profile.html#security">
+                        Change Password
+                    </a>
+
+                    <a href="reset-password.html">
+                        Forgot Password
+                    </a>
+
+                    <button
+                        id="dashboardLogoutButton"
+                        type="button">
+
+                        Logout
+
+                    </button>
+
+                </div>
+
+            </div>
+
+            <!-- NAVIGATION -->
+
+            <nav class="app-nav">
+
+                <a href="index.html">
+                    Chat Bot
+                </a>
+
+                <a href="upload.html">
+                    Analyze Report
+                </a>
+
+                <a href="reports.html">
+                    Reports
+                </a>
+
+                <a class="active"
+                   href="dashboard.html">
+
+                    Dashboard
+
+                </a>
+
+                <a href="profile.html">
+                    Profile
+                </a>
+
+            </nav>
+
+        </aside>
+
+        <main class="app-main">
+            <section class="page-hero">
+                <div>
+                    <p class="eyebrow">MedIntel AI overview</p>
+                    <h1>Smart Healthcare Intelligence Dashboard</h1>
+                    <p>See report activity, risk signals, AI confidence, and recommendation-first next steps.</p>
+                </div>
+                <a class="btn primary" href="upload.html">Analyze Report</a>
+            </section>
+
+            <section class="stats-grid">
+                <article class="stat-card">
+                    <span>Total Reports</span>
+                    <strong id="totalReportsValue">0</strong>
+                </article>
+                <article class="stat-card high-risk-card">
+                    <span>High Risk</span>
+                    <strong id="highRiskValue">0</strong>
+                </article>
+                <article class="stat-card">
+                    <span>Recent Type</span>
+                    <strong id="latestTypeValue">-</strong>
+                </article>
+                <article class="stat-card">
+                    <span>Chat Context</span>
+                    <strong id="chatContextValue">Off</strong>
+                </article>
+            </section>
+
+            <section class="card dashboard-action-context">
+                <div class="section-title">
+                    <div>
+                        <p class="eyebrow">Recommendation first</p>
+                        <h2>Latest report action plan</h2>
+                    </div>
+                    <a class="btn secondary small" href="reports.html">Review Reports</a>
+                </div>
+                <div id="dashboardReportActionContext">
+                    <p class="empty-state left">Analyze or open a report to see a prioritized next step.</p>
+                </div>
+            </section>
+
+            <section class="grid two-column dashboard-grid">
+                <article class="card">
+                    <div class="section-title">
+                        <div>
+                            <p class="eyebrow">Recent reports</p>
+                            <h2>Latest saved results</h2>
+                        </div>
+                        <a class="btn secondary small" href="reports.html">Open Reports</a>
+                    </div>
+                    <div id="dashboardRecentReports" class="card-list">
+                        <p class="empty-state">Loading reports...</p>
+                    </div>
+                </article>
+
+                <article class="card dashboard-confidence-card">
+                    <div class="section-title">
+                        <div>
+                            <p class="eyebrow">MedIntel analytics</p>
+                            <h2>Latest confidence</h2>
+                        </div>
+                        <span id="dashboardConfidenceValue" class="confidence-badge">0%</span>
+                    </div>
+
+                    <div id="dashboardConfidenceMeter" class="confidence-meter large" role="meter"
+                        aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
+                        aria-label="Latest AI confidence">
+                        <span id="dashboardConfidenceFill"></span>
+                    </div>
+
+                    <div id="dashboardRiskSummary" class="risk-summary-row">
+                        <span class="risk-chip neutral">No chat analysis yet</span>
+                    </div>
+                </article>
+            </section>
+
+            <section class="grid two-column">
+                <article class="card">
+                    <div class="section-title">
+                        <div>
+                            <p class="eyebrow">Timeline</p>
+                            <h2>Symptom evolution</h2>
+                        </div>
+                    </div>
+                    <div id="timelineAnalytics" class="timeline-analytics">
+                        <p class="empty-state">No symptom timeline yet.</p>
+                    </div>
+                </article>
+
+                <article class="card">
+                    <p class="eyebrow">Quick actions</p>
+                    <h2>Continue your workflow</h2>
+                    <div class="quick-links">
+                        <a class="quick-link" href="index.html">
+                            <strong>Ask the assistant</strong>
+                            <span>Continue symptom follow-up questions and timeline tracking.</span>
+                        </a>
+                        <a class="quick-link" href="upload.html">
+                            <strong>Analyze a new report</strong>
+                            <span>Upload a PDF or image and save the MedIntel AI summary.</span>
+                        </a>
+                        <a class="quick-link" href="reports.html">
+                            <strong>Review saved reports</strong>
+                            <span>Search, view, delete, and download report summaries.</span>
+                        </a>
+                    </div>
+                </article>
+            </section>
+        </main>
+    </div>
+</body>
+
+</html>
