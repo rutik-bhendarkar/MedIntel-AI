@@ -1,4 +1,4 @@
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs"); // Matches your server.js installation package
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
@@ -9,6 +9,7 @@ const db = global.db || require("../config/db");
 let userColumnsCache = null;
 let resetTableReady = false;
 
+// 🟢 Postgres Wrapper Utility
 function query(sql, params = []) {
     return new Promise((resolve, reject) => {
         db.query(sql, params, (err, results) => {
@@ -16,8 +17,8 @@ function query(sql, params = []) {
                 reject(err);
                 return;
             }
-
-            resolve(results);
+            // Postgres stores dataset rows inside the .rows property
+            resolve(results.rows || results);
         });
     });
 }
@@ -32,8 +33,7 @@ async function getUserColumns() {
         "SELECT column_name FROM information_schema.columns WHERE table_name = 'users'"
     );
 
-    // Our db wrapper returns rows as an array of objects with column_name
-    userColumnsCache = new Set((rows.rows || rows).map((r) => r.column_name || r.field || r.Field).filter(Boolean));
+    userColumnsCache = new Set(rows.map((r) => r.column_name).filter(Boolean));
     return userColumnsCache;
 }
 
@@ -42,7 +42,7 @@ async function ensurePasswordResetTable() {
         return;
     }
 
-    // Postgres-compatible table definition. Use SERIAL for auto-increment and TIMESTAMP for datetime.
+    // Postgres-compatible table definition.
     await query(`
         CREATE TABLE IF NOT EXISTS password_reset_otps (
             id SERIAL PRIMARY KEY,
@@ -73,11 +73,9 @@ function isValidEmail(email) {
 
 function validatePassword(password) {
     const value = String(password || "");
-
     if (value.length < 6) {
         return "Password must be at least 6 characters";
     }
-
     return "";
 }
 
@@ -85,7 +83,6 @@ function toNullableString(value, maxLength = 1000) {
     if (value === null || value === undefined) {
         return null;
     }
-
     const text = String(value).trim();
     return text ? text.slice(0, maxLength) : null;
 }
@@ -94,15 +91,12 @@ function parseBoolean(value, fallback = false) {
     if (value === null || value === undefined || value === "") {
         return fallback;
     }
-
     if (typeof value === "boolean") {
         return value;
     }
-
     if (typeof value === "number") {
         return value === 1;
     }
-
     return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
 }
 
@@ -110,23 +104,18 @@ function sanitizeAge(value) {
     if (value === null || value === undefined || value === "") {
         return null;
     }
-
     const age = Number(value);
-
     if (!Number.isInteger(age) || age < 0 || age > 130) {
         return undefined;
     }
-
     return age;
 }
 
 function sanitizeGender(value) {
     const gender = toNullableString(value, 40);
-
     if (!gender) {
         return null;
     }
-
     const allowed = ["Male", "Female", "Other", "Prefer not to say"];
     return allowed.includes(gender) ? gender : gender.slice(0, 40);
 }
@@ -134,10 +123,6 @@ function sanitizeGender(value) {
 function sanitizeThemePreference(value) {
     const theme = String(value || "light").trim().toLowerCase();
     return ["light", "dark", "system"].includes(theme) ? theme : "light";
-}
-
-function formatMysqlDate(date) {
-    return date.toISOString().slice(0, 19).replace("T", " ");
 }
 
 function isInactiveUser(user) {
@@ -174,25 +159,27 @@ function buildSafeUserProfile(user = {}) {
     };
 }
 
+// 🟢 Changed placeholders to $1
 async function findUserByEmail(email) {
-    const rows = await query("SELECT * FROM users WHERE email = ? LIMIT 1", [normalizeEmail(email)]);
+    const rows = await query("SELECT * FROM users WHERE email = $1 LIMIT 1", [normalizeEmail(email)]);
     return rows[0] || null;
 }
 
+// 🟢 Changed placeholders to $1
 async function findUserById(id) {
-    const rows = await query("SELECT * FROM users WHERE id = ? LIMIT 1", [id]);
+    const rows = await query("SELECT * FROM users WHERE id = $1 LIMIT 1", [id]);
     return rows[0] || null;
 }
 
+// 🟢 Changed placeholders to $1
 async function updateLastLoginIfAvailable(userId) {
     try {
         const columns = await getUserColumns();
-
         if (columns.has("last_login")) {
-            await query("UPDATE users SET last_login = NOW() WHERE id = ?", [userId]);
+            await query("UPDATE users SET last_login = NOW() WHERE id = $1", [userId]);
         }
     } catch (error) {
-        // Login should not fail only because an optional metadata column is missing.
+        // Fail-safe
     }
 }
 
@@ -210,21 +197,13 @@ function signAuthToken(user) {
 
 async function sendPasswordResetEmail(user, otp) {
     const host = process.env.SMTP_HOST;
-
-    if (!host) {
-        return false;
-    }
+    if (!host) return false;
 
     const transporter = nodemailer.createTransport({
         host,
         port: Number(process.env.SMTP_PORT || 587),
         secure: String(process.env.SMTP_SECURE || "").toLowerCase() === "true",
-        auth: process.env.SMTP_USER
-            ? {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASS
-            }
-            : undefined
+        auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined
     });
 
     const appName = "MedIntel AI";
@@ -243,7 +222,6 @@ async function sendPasswordResetEmail(user, otp) {
             <p><a href="${resetUrl}">Open reset page</a></p>
         `
     });
-
     return true;
 }
 
@@ -252,13 +230,7 @@ async function sendPasswordResetEmail(user, otp) {
 // =====================================================
 exports.registerUser = async (req, res) => {
     try {
-        const {
-            full_name,
-            email,
-            password,
-            age,
-            gender
-        } = req.body;
+        const { full_name, email, password, age, gender } = req.body;
 
         const cleanName = toNullableString(full_name, 120);
         const normalizedEmail = normalizeEmail(email);
@@ -266,83 +238,53 @@ exports.registerUser = async (req, res) => {
         const cleanAge = sanitizeAge(age);
 
         if (!cleanName || !normalizedEmail || !password) {
-            return res.status(400).json({
-                success: false,
-                message: "Full name, email and password are required"
-            });
+            return res.status(400).json({ success: false, message: "Full name, email and password are required" });
         }
 
         if (!isValidEmail(normalizedEmail)) {
-            return res.status(400).json({
-                success: false,
-                message: "Please enter a valid email address"
-            });
+            return res.status(400).json({ success: false, message: "Please enter a valid email address" });
         }
 
         if (passwordError) {
-            return res.status(400).json({
-                success: false,
-                message: passwordError
-            });
+            return res.status(400).json({ success: false, message: passwordError });
         }
 
         if (cleanAge === undefined) {
-            return res.status(400).json({
-                success: false,
-                message: "Age must be between 0 and 130"
-            });
+            return res.status(400).json({ success: false, message: "Age must be between 0 and 130" });
+        }
+
+        // Check if unique user exists using Postgres format
+        const user = await findUserByEmail(normalizedEmail);
+        if (user) {
+            return res.status(400).json({ success: false, message: "Email already registered" });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
+        // 🟢 Changed placeholders to $1, $2, etc., and attached RETURNING id
         const sql = `
-            INSERT INTO users
-            (
-                full_name,
-                email,
-                password,
-                age,
-                gender
-            )
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO users (full_name, email, password, age, gender, created_at)
+            VALUES ($1, $2, $3, $4, $5, NOW())
+            RETURNING id
         `;
 
-        db.query(
-            sql,
-            [
-                cleanName,
-                normalizedEmail,
-                hashedPassword,
-                cleanAge,
-                sanitizeGender(gender)
-            ],
-            (err, result) => {
-                if (err) {
-                    if (err.code === "ER_DUP_ENTRY") {
-                        return res.status(400).json({
-                            success: false,
-                            message: "Email already registered"
-                        });
-                    }
+        const result = await query(sql, [
+            cleanName,
+            normalizedEmail,
+            hashedPassword,
+            cleanAge,
+            sanitizeGender(gender)
+        ]);
 
-                    return res.status(500).json({
-                        success: false,
-                        message: "Registration failed"
-                    });
-                }
-
-                return res.status(201).json({
-                    success: true,
-                    message: "User registered successfully",
-                    userId: result.insertId
-                });
-            }
-        );
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: "Server error"
+        return res.status(201).json({
+            success: true,
+            message: "User registered successfully",
+            userId: result[0].id // 🟢 Reads directly from Postgres array mapping
         });
+
+    } catch (error) {
+        console.error("Registration Error:", error);
+        res.status(500).json({ success: false, message: "Registration failed" });
     }
 };
 
@@ -355,35 +297,23 @@ exports.loginUser = async (req, res) => {
         const normalizedEmail = normalizeEmail(email);
 
         if (!normalizedEmail || !password) {
-            return res.status(400).json({
-                success: false,
-                message: "Email and password are required"
-            });
+            return res.status(400).json({ success: false, message: "Email and password are required" });
         }
 
         const user = await findUserByEmail(normalizedEmail);
 
         if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "User not found"
-            });
+            return res.status(404).json({ success: false, message: "User not found" });
         }
 
         if (isInactiveUser(user)) {
-            return res.status(403).json({
-                success: false,
-                message: "This account is deactivated"
-            });
+            return res.status(403).json({ success: false, message: "This account is deactivated" });
         }
 
         const isMatch = await bcrypt.compare(password, user.password);
 
         if (!isMatch) {
-            return res.status(401).json({
-                success: false,
-                message: "Invalid password"
-            });
+            return res.status(401).json({ success: false, message: "Invalid password" });
         }
 
         await updateLastLoginIfAvailable(user.id);
@@ -398,10 +328,7 @@ exports.loginUser = async (req, res) => {
             user: buildSafeUserProfile(refreshedUser || user)
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: "Server error"
-        });
+        res.status(500).json({ success: false, message: "Server error" });
     }
 };
 
@@ -413,21 +340,12 @@ exports.getCurrentUserProfile = async (req, res) => {
         const user = await findUserById(req.user.id);
 
         if (!user || isInactiveUser(user)) {
-            return res.status(404).json({
-                success: false,
-                message: "User profile not found"
-            });
+            return res.status(404).json({ success: false, message: "User profile not found" });
         }
 
-        return res.status(200).json({
-            success: true,
-            user: buildSafeUserProfile(user)
-        });
+        return res.status(200).json({ success: true, user: buildSafeUserProfile(user) });
     } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: "Unable to load profile"
-        });
+        return res.status(500).json({ success: false, message: "Unable to load profile" });
     }
 };
 
@@ -441,27 +359,13 @@ exports.updateCurrentUserProfile = async (req, res) => {
 
         if (Object.prototype.hasOwnProperty.call(req.body, "full_name")) {
             const name = toNullableString(req.body.full_name, 120);
-
-            if (!name) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Full name is required"
-                });
-            }
-
+            if (!name) return res.status(400).json({ success: false, message: "Full name is required" });
             fields.full_name = name;
         }
 
         if (Object.prototype.hasOwnProperty.call(req.body, "age")) {
             const age = sanitizeAge(req.body.age);
-
-            if (age === undefined) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Age must be between 0 and 130"
-                });
-            }
-
+            if (age === undefined) return res.status(400).json({ success: false, message: "Age must be between 0 and 130" });
             fields.age = age;
         }
 
@@ -495,7 +399,8 @@ exports.updateCurrentUserProfile = async (req, res) => {
             });
         }
 
-        const assignments = Object.keys(fields).map((field) => `${field} = ?`);
+        // 🟢 Converts fields dynamic syntax to Postgres ($1, $2)
+        const assignments = Object.keys(fields).map((field, idx) => `${field} = $${idx + 1}`);
         const params = Object.values(fields);
 
         if (columns.has("updated_at")) {
@@ -503,8 +408,8 @@ exports.updateCurrentUserProfile = async (req, res) => {
         }
 
         params.push(req.user.id);
-
-        await query(`UPDATE users SET ${assignments.join(", ")} WHERE id = ?`, params);
+        // Appends the target ID parameter dynamically
+        await query(`UPDATE users SET ${assignments.join(", ")} WHERE id = $${params.length}`, params);
 
         const updatedUser = await findUserById(req.user.id);
 
@@ -514,10 +419,7 @@ exports.updateCurrentUserProfile = async (req, res) => {
             user: buildSafeUserProfile(updatedUser)
         });
     } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: "Unable to update profile"
-        });
+        return res.status(500).json({ success: false, message: "Unable to update profile" });
     }
 };
 
@@ -531,64 +433,38 @@ exports.changePassword = async (req, res) => {
         const passwordError = validatePassword(newPassword);
 
         if (!currentPassword || !newPassword) {
-            return res.status(400).json({
-                success: false,
-                message: "Current password and new password are required"
-            });
+            return res.status(400).json({ success: false, message: "Current password and new password are required" });
         }
 
         if (passwordError) {
-            return res.status(400).json({
-                success: false,
-                message: passwordError
-            });
+            return res.status(400).json({ success: false, message: passwordError });
         }
 
         const user = await findUserById(req.user.id);
-
         if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "User not found"
-            });
+            return res.status(404).json({ success: false, message: "User not found" });
         }
 
         const currentPasswordMatches = await bcrypt.compare(currentPassword, user.password);
-
         if (!currentPasswordMatches) {
-            return res.status(401).json({
-                success: false,
-                message: "Current password is incorrect"
-            });
+            return res.status(401).json({ success: false, message: "Current password is incorrect" });
         }
 
         const sameAsOld = await bcrypt.compare(newPassword, user.password);
-
         if (sameAsOld) {
-            return res.status(400).json({
-                success: false,
-                message: "Choose a new password that is different from the current password"
-            });
+            return res.status(400).json({ success: false, message: "Choose a new password that is different from current password" });
         }
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
         const columns = await getUserColumns();
         const updatedAtSql = columns.has("updated_at") ? ", updated_at = NOW()" : "";
 
-        await query(`UPDATE users SET password = ?${updatedAtSql} WHERE id = ?`, [
-            hashedPassword,
-            req.user.id
-        ]);
+        // 🟢 Swapped placeholders to Postgres standard ($1, $2)
+        await query(`UPDATE users SET password = $1 ${updatedAtSql} WHERE id = $2`, [hashedPassword, req.user.id]);
 
-        return res.status(200).json({
-            success: true,
-            message: "Password changed successfully"
-        });
+        return res.status(200).json({ success: true, message: "Password changed successfully" });
     } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: "Unable to change password"
-        });
+        return res.status(500).json({ success: false, message: "Unable to change password" });
     }
 };
 
@@ -597,55 +473,39 @@ exports.changePassword = async (req, res) => {
 // =====================================================
 exports.requestPasswordReset = async (req, res) => {
     const genericMessage = "If this email exists, a password reset OTP has been sent.";
-
     try {
         const email = normalizeEmail(req.body.email);
-
         if (!email || !isValidEmail(email)) {
-            return res.status(400).json({
-                success: false,
-                message: "A valid email address is required"
-            });
+            return res.status(400).json({ success: false, message: "A valid email address is required" });
         }
 
         await ensurePasswordResetTable();
-
         const user = await findUserByEmail(email);
 
         if (!user || isInactiveUser(user)) {
-            return res.status(200).json({
-                success: true,
-                message: genericMessage
-            });
+            return res.status(200).json({ success: true, message: genericMessage });
         }
 
         const otp = String(crypto.randomInt(100000, 1000000));
         const otpHash = await bcrypt.hash(otp, 10);
+        
+        // 🟢 Postgres processes Date values objects cleanly without custom formatting strings
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-        await query(
-            "UPDATE password_reset_otps SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL",
-            [user.id]
-        );
-
-        await query(
-            "INSERT INTO password_reset_otps (user_id, email, otp_hash, expires_at) VALUES (?, ?, ?, ?)",
-            [user.id, user.email, otpHash, formatMysqlDate(expiresAt)]
-        );
+        // 🟢 Swapped parameters to Postgres ($1, $2)
+        await query("UPDATE password_reset_otps SET used_at = NOW() WHERE user_id = $1 AND used_at IS NULL", [user.id]);
+        await query("INSERT INTO password_reset_otps (user_id, email, otp_hash, expires_at) VALUES ($1, $2, $3, $4)", [
+            user.id, user.email, otpHash, expiresAt
+        ]);
 
         let emailSent = false;
-
         try {
             emailSent = await sendPasswordResetEmail(user, otp);
         } catch (error) {
             emailSent = false;
         }
 
-        const response = {
-            success: true,
-            message: genericMessage,
-            email_sent: emailSent
-        };
+        const response = { success: true, message: genericMessage, email_sent: emailSent };
 
         if (!emailSent && process.env.NODE_ENV !== "production") {
             response.dev_otp = otp;
@@ -654,10 +514,7 @@ exports.requestPasswordReset = async (req, res) => {
 
         return res.status(200).json(response);
     } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: "Unable to start password reset"
-        });
+        return res.status(500).json({ success: false, message: "Unable to start password reset" });
     }
 };
 
@@ -672,63 +529,38 @@ exports.resetPassword = async (req, res) => {
         const passwordError = validatePassword(newPassword);
 
         if (!email || !otp || !newPassword) {
-            return res.status(400).json({
-                success: false,
-                message: "Email, OTP, and new password are required"
-            });
+            return res.status(400).json({ success: false, message: "Email, OTP, and new password are required" });
         }
 
         if (!isValidEmail(email)) {
-            return res.status(400).json({
-                success: false,
-                message: "A valid email address is required"
-            });
+            return res.status(400).json({ success: false, message: "A valid email address is required" });
         }
 
         if (!/^\d{6}$/.test(otp)) {
-            return res.status(400).json({
-                success: false,
-                message: "OTP must be 6 digits"
-            });
+            return res.status(400).json({ success: false, message: "OTP must be 6 digits" });
         }
 
         if (passwordError) {
-            return res.status(400).json({
-                success: false,
-                message: passwordError
-            });
+            return res.status(400).json({ success: false, message: passwordError });
         }
 
         await ensurePasswordResetTable();
-
         const user = await findUserByEmail(email);
 
         if (!user || isInactiveUser(user)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid or expired reset code"
-            });
+            return res.status(400).json({ success: false, message: "Invalid or expired reset code" });
         }
 
-        const resetRows = await query(
-            `
-                SELECT *
-                FROM password_reset_otps
-                WHERE user_id = ?
-                  AND email = ?
-                  AND used_at IS NULL
-                  AND expires_at > NOW()
-                ORDER BY created_at DESC
-                LIMIT 5
-            `,
-            [user.id, user.email]
-        );
+        // 🟢 Changed placeholders to Postgres ($1, $2)
+        const resetRows = await query(`
+            SELECT * FROM password_reset_otps
+            WHERE user_id = $1 AND email = $2 AND used_at IS NULL AND expires_at > NOW()
+            ORDER BY created_at DESC LIMIT 5
+        `, [user.id, user.email]);
 
         let matchedReset = null;
-
         for (const reset of resetRows) {
             const matches = await bcrypt.compare(otp, reset.otp_hash);
-
             if (matches) {
                 matchedReset = reset;
                 break;
@@ -736,44 +568,25 @@ exports.resetPassword = async (req, res) => {
         }
 
         if (!matchedReset) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid or expired reset code"
-            });
+            return res.status(400).json({ success: false, message: "Invalid or expired reset code" });
         }
 
         const sameAsOld = await bcrypt.compare(newPassword, user.password);
-
         if (sameAsOld) {
-            return res.status(400).json({
-                success: false,
-                message: "Choose a password that is different from the current password"
-            });
+            return res.status(400).json({ success: false, message: "Choose a password that is different from current password" });
         }
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
         const columns = await getUserColumns();
         const updatedAtSql = columns.has("updated_at") ? ", updated_at = NOW()" : "";
 
-        await query(`UPDATE users SET password = ?${updatedAtSql} WHERE id = ?`, [
-            hashedPassword,
-            user.id
-        ]);
+        // 🟢 Swapped query placeholders
+        await query(`UPDATE users SET password = $1 ${updatedAtSql} WHERE id = $2`, [hashedPassword, user.id]);
+        await query("UPDATE password_reset_otps SET used_at = NOW() WHERE id = $1", [matchedReset.id]);
 
-        await query(
-            "UPDATE password_reset_otps SET used_at = NOW() WHERE id = ?",
-            [matchedReset.id]
-        );
-
-        return res.status(200).json({
-            success: true,
-            message: "Password reset successfully. Please log in with your new password."
-        });
+        return res.status(200).json({ success: true, message: "Password reset successfully. Please log in with your new password." });
     } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: "Unable to reset password"
-        });
+        return res.status(500).json({ success: false, message: "Unable to reset password" });
     }
 };
 
@@ -781,10 +594,7 @@ exports.resetPassword = async (req, res) => {
 // LOGOUT
 // =====================================================
 exports.logoutUser = (req, res) => {
-    return res.status(200).json({
-        success: true,
-        message: "Logged out successfully"
-    });
+    return res.status(200).json({ success: true, message: "Logged out successfully" });
 };
 
 // =====================================================
@@ -798,13 +608,13 @@ exports.deactivateCurrentUser = async (req, res) => {
         let canDeactivate = false;
 
         if (columns.has("is_active")) {
-            assignments.push("is_active = ?");
+            assignments.push(`is_active = $${params.length + 1}`);
             params.push(0);
             canDeactivate = true;
         }
 
         if (columns.has("account_status")) {
-            assignments.push("account_status = ?");
+            assignments.push(`account_status = $${params.length + 1}`);
             params.push("deactivated");
             canDeactivate = true;
         }
@@ -814,24 +624,15 @@ exports.deactivateCurrentUser = async (req, res) => {
         }
 
         if (!canDeactivate) {
-            return res.status(501).json({
-                success: false,
-                message: "Account deactivation requires the is_active or account_status column"
-            });
+            return res.status(501).json({ success: false, message: "Account deactivation requires the is_active or account_status column" });
         }
 
         params.push(req.user.id);
+        // 🟢 Safe target matching parameter tracking
+        await query(`UPDATE users SET ${assignments.join(", ")} WHERE id = $${params.length}`, params);
 
-        await query(`UPDATE users SET ${assignments.join(", ")} WHERE id = ?`, params);
-
-        return res.status(200).json({
-            success: true,
-            message: "Account deactivated successfully"
-        });
+        return res.status(200).json({ success: true, message: "Account deactivated successfully" });
     } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: "Unable to deactivate account"
-        });
+        return res.status(500).json({ success: false, message: "Unable to deactivate account" });
     }
 };
