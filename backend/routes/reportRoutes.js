@@ -4,7 +4,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const { spawn } = require("child_process");
-const db = require("../config/db");
+const db = require("../config/db"); // Assuming this exports your new pg Pool
 const authMiddleware = require("../middleware/authMiddleware");
 const { generateSummaryPdf } = require("../utils/pdfGenerator");
 const { analyzeReport } = require("../services/reportAnalyzer");
@@ -52,21 +52,11 @@ const upload = multer({
 });
 
 function parseList(value) {
-    if (!value) {
-        return [];
-    }
-
-    if (Array.isArray(value)) {
-        return value;
-    }
-
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
     if (typeof value === "string") {
         const trimmed = value.trim();
-
-        if (!trimmed) {
-            return [];
-        }
-
+        if (!trimmed) return [];
         try {
             const parsed = JSON.parse(trimmed);
             return Array.isArray(parsed) ? parsed : [trimmed];
@@ -74,13 +64,11 @@ function parseList(value) {
             return trimmed.split(/\r?\n|;/).map((item) => item.trim()).filter(Boolean);
         }
     }
-
     return [String(value)];
 }
 
 function sendPdf(res, summary, fileName = "ai-report-summary.pdf") {
     const pdf = generateSummaryPdf(summary);
-
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
     res.send(pdf);
@@ -122,31 +110,18 @@ function normalizeLabKey(key) {
         .trim();
 
     const map = {
-        hgb: "hemoglobin",
-        hb: "hemoglobin",
-        hemoglobin: "hemoglobin",
-        wbc: "wbc",
-        "white blood cell": "wbc",
-        "white blood cells": "wbc",
-        platelet: "platelets",
-        platelets: "platelets",
-        "platelet count": "platelets",
-        glucose: "glucose",
-        "blood sugar": "glucose",
-        sugar: "glucose",
-        hba1c: "hba1c",
-        "hb a1c": "hba1c",
+        hgb: "hemoglobin", hb: "hemoglobin", hemoglobin: "hemoglobin",
+        wbc: "wbc", "white blood cell": "wbc", "white blood cells": "wbc",
+        platelet: "platelets", platelets: "platelets", "platelet count": "platelets",
+        glucose: "glucose", "blood sugar": "glucose", sugar: "glucose",
+        hba1c: "hba1c", "hb a1c": "hba1c",
         cholesterol: "cholesterol",
-        triglyceride: "triglycerides",
-        triglycerides: "triglycerides",
+        triglyceride: "triglycerides", triglycerides: "triglycerides",
         creatinine: "creatinine",
-        alt: "alt",
-        sgpt: "alt",
-        ast: "ast",
-        sgot: "ast",
+        alt: "alt", sgpt: "alt",
+        ast: "ast", sgot: "ast",
         bilirubin: "bilirubin",
-        urea: "urea",
-        bun: "urea"
+        urea: "urea", bun: "urea"
     };
 
     return map[normalized] || null;
@@ -176,13 +151,11 @@ function normalizeRiskText(value) {
 
 function getReportCategory(reportType = "") {
     const text = String(reportType).toLowerCase();
-
     if (text.includes("diabetes") || text.includes("glucose") || text.includes("hba1c")) return "Diabetes / Metabolic";
     if (text.includes("heart") || text.includes("cardiac") || text.includes("lipid") || text.includes("cholesterol")) return "Heart / Lipid";
     if (text.includes("cbc") || text.includes("blood")) return "CBC";
     if (text.includes("liver") || text.includes("lft")) return "Liver";
     if (text.includes("kidney") || text.includes("renal") || text.includes("kft")) return "Kidney";
-
     return "General Health";
 }
 
@@ -204,7 +177,6 @@ function buildSmartRecommendations(reportType, riskLevel, findings, medicalAnaly
 
     abnormal.forEach((item) => {
         const name = String(item.test || "").toLowerCase();
-
         if (name.includes("glucose") || name.includes("hba1c")) {
             add("Track glucose trends, reduce high-sugar foods, and discuss diabetes screening or medication adjustment.");
         } else if (name.includes("cholesterol") || name.includes("triglycerides")) {
@@ -229,7 +201,6 @@ function buildSmartRecommendations(reportType, riskLevel, findings, medicalAnaly
     }
 
     add("Do not change prescribed medicines based only on this AI interpretation.");
-
     return recommendations.slice(0, 8);
 }
 
@@ -300,20 +271,14 @@ function buildEnhancedAnalysis(analysisResult, uploadedAt) {
 
 const analyzeUploadedReport = (req, res) => {
     if (!req.file) {
-        return res.status(400).json({
-            success: false,
-            message: "No file uploaded"
-        });
+        return res.status(400).json({ success: false, message: "No file uploaded" });
     }
 
     const userId = req.user?.id;
 
     if (!userId) {
         fs.unlink(req.file.path, () => {});
-        return res.status(401).json({
-            success: false,
-            message: "Authentication token is required"
-        });
+        return res.status(401).json({ success: false, message: "Authentication token is required" });
     }
 
     const filePath = req.file.path;
@@ -326,17 +291,11 @@ const analyzeUploadedReport = (req, res) => {
     let output = "";
     let errorOutput = "";
 
-    python.stdout.on("data", (data) => {
-        output += data.toString();
-    });
-
-    python.stderr.on("data", (data) => {
-        errorOutput += data.toString();
-    });
+    python.stdout.on("data", (data) => { output += data.toString(); });
+    python.stderr.on("data", (data) => { errorOutput += data.toString(); });
 
     python.on("error", (error) => {
         fs.unlink(filePath, () => {});
-
         return res.status(500).json({
             success: false,
             message: "Could not start Python analyzer",
@@ -356,7 +315,6 @@ const analyzeUploadedReport = (req, res) => {
         }
 
         let analysisResult;
-
         try {
             analysisResult = JSON.parse(output.trim());
         } catch (parseError) {
@@ -366,24 +324,20 @@ const analyzeUploadedReport = (req, res) => {
             });
         }
 
-        const reportType = Array.isArray(analysisResult.report_type)
-            ? analysisResult.report_type.join(", ")
-            : analysisResult.report_type;
+        const reportType = Array.isArray(analysisResult.report_type) ? analysisResult.report_type.join(", ") : analysisResult.report_type;
         const reportName = req.file.filename;
-        const findings = Array.isArray(analysisResult.findings)
-            ? analysisResult.findings.join(", ")
-            : analysisResult.findings || "";
-        const recommendations = Array.isArray(analysisResult.recommendations)
-            ? analysisResult.recommendations.join(", ")
-            : analysisResult.recommendations || "";
+        const findings = Array.isArray(analysisResult.findings) ? analysisResult.findings.join(", ") : analysisResult.findings || "";
+        const recommendations = Array.isArray(analysisResult.recommendations) ? analysisResult.recommendations.join(", ") : analysisResult.recommendations || "";
         const riskLevel = analysisResult.risk_level || "LOW";
         const uploadedAt = new Date().toISOString();
         const enhancedAnalysis = buildEnhancedAnalysis(analysisResult, uploadedAt);
 
+        // 🟢 POSTGRESQL FIX 1: Using $1, $2 and RETURNING id
         const sql = `
             INSERT INTO report_history
             (user_id, report_name, report_type, risk_level, findings, recommendations, uploaded_at)
-            VALUES (?, ?, ?, ?, ?, ?, NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, NOW())
+            RETURNING id
         `;
 
         db.query(sql, [userId, reportName, reportType, riskLevel, findings, enhancedAnalysis.recommendations.join("; ")], (dbErr, dbResult) => {
@@ -396,7 +350,8 @@ const analyzeUploadedReport = (req, res) => {
 
             return res.status(200).json({
                 status: "success",
-                report_id: dbResult.insertId,
+                // 🟢 POSTGRESQL FIX 2: Getting the ID from the returned rows
+                report_id: dbResult.rows[0].id,
                 uploaded_at: uploadedAt,
                 analysis: enhancedAnalysis
             });
@@ -422,7 +377,6 @@ router.post("/export-pdf", (req, res) => {
         fileName: body.uploaded_file || body.fileName || "uploaded-report",
         disclaimer: body.disclaimer || "This MedIntel AI summary is for education only and is not a replacement for a qualified doctor."
     };
-
     sendPdf(res, summary);
 });
 
@@ -432,22 +386,24 @@ router.get("/", authMiddleware, getAllReports);
 router.get("/search", authMiddleware, searchReports);
 
 router.get("/:id/pdf", authMiddleware, (req, res) => {
+    // 🟢 POSTGRESQL FIX 3: Using $1 and $2
     const sql = `
         SELECT * FROM report_history
-        WHERE id = ?
-          AND user_id = ?
+        WHERE id = $1
+          AND user_id = $2
     `;
 
-    db.query(sql, [req.params.id, req.user.id], (err, results) => {
+    db.query(sql, [req.params.id, req.user.id], (err, result) => {
         if (err) {
             return res.status(500).json({ message: "Database Error" });
         }
 
-        if (!results.length) {
+        // 🟢 POSTGRESQL FIX 4: Reading from result.rows
+        if (!result.rows || result.rows.length === 0) {
             return res.status(404).json({ message: "Report Not Found" });
         }
 
-        const summary = buildStoredReportSummary(results[0]);
+        const summary = buildStoredReportSummary(result.rows[0]);
         const fileName = `report-${req.params.id}-summary.pdf`;
         return sendPdf(res, summary, fileName);
     });
