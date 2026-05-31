@@ -1,6 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
-    const API_BASE = "http://127.0.0.1:5000/api/report";
-    const AUTH_BASE = "http://127.0.0.1:5000/api/auth";
+    const API_BASE = "https://medintel-ai-yszx.onrender.com/api/report";
+    const AUTH_BASE = "https://medintel-ai-yszx.onrender.com/api/auth";
     const ALL_REPORTS_URL = `${API_BASE}/all`;
     const REPORT_CONTEXT_KEY = "latestReportContext";
     const CHAT_ANALYSIS_KEY = "latestChatAnalysis";
