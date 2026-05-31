@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", () => {
-    const API_BASE = "http://127.0.0.1:5000/api/auth";
+    const API_BASE = "https://medintel-ai-yszx.onrender.com/api/auth";
 
     const status = document.getElementById("profilePageStatus");
     const avatar = document.getElementById("profileAvatar");

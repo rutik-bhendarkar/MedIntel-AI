@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", () => {
-    const API_URL = "http://127.0.0.1:5000/api/chat/ask";
+    const API_URL = "https://medintel-ai-yszx.onrender.com/api/chat/ask";
 
     const chatForm = document.getElementById("chatForm");
     const chatInput = document.getElementById("chatInput");

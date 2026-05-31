@@ -6,9 +6,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const rememberMe = document.getElementById("rememberMe");
     const loginButton = loginForm.querySelector(".auth-btn");
 
-    const API_URL = "https://medintel-backend.onrender.com";
+    // 🟢 Updated to the correct live Render URL
+    const API_URL = "https://medintel-ai-yszx.onrender.com/api/auth/login";
 
-    const existingToken = localStorage.getItem("token");
+    const existingToken = localStorage.getItem("token") || sessionStorage.getItem("token");
     if (existingToken) {
         window.location.href = "dashboard.html";
         return;
