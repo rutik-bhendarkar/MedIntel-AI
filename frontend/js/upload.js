@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", () => {
-    const API_BASE = "http://127.0.0.1:5000/api/report";
+    const API_BASE = window.API_ENDPOINTS.report;
     const UPLOAD_URL = `${API_BASE}/upload`;
     const ALL_REPORTS_URL = `${API_BASE}/all`;
     const auth = getAuth();

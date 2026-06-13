@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", () => {
-    const API_URL = "http://127.0.0.1:5000/api/chat/ask";
+    const API_URL = `${window.API_ENDPOINTS.chat}/ask`;
 
     const chatForm = document.getElementById("chatForm");
     const chatInput = document.getElementById("chatInput");
@@ -170,8 +170,8 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (error) {
             removeThinkingBubble();
             await addBotMessage(
-                error.message || "Unable to reach the chatbot backend. Please try again.",
-                { risk_level: "medium", confidence: 0 },
+                getChatErrorMessage(error),
+                null,
                 { animate: false }
             );
             clearFollowUps();
@@ -804,6 +804,20 @@ document.addEventListener("DOMContentLoaded", () => {
                 raw_response: text
             };
         }
+    }
+
+    function getChatErrorMessage(error) {
+        const message = String(error?.message || "").trim();
+
+        if (!message || /failed to fetch|networkerror|load failed/i.test(message)) {
+            return "I could not reach the MedIntel AI backend right now. Please check your connection and try again.";
+        }
+
+        if (/non-json response/i.test(message)) {
+            return "The chatbot service returned an unexpected response. Please try again in a moment.";
+        }
+
+        return message;
     }
 
     function formatTopThinking(items) {

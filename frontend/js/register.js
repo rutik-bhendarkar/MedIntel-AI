@@ -1,4 +1,4 @@
-const API_BASE_URL = "https://medintel-ai-dw5w.onrender.com";
+const { API_BASE_URL } = window;
 
 const registerForm = document.getElementById("registerForm");
 const registerMessage = document.getElementById("registerMessage");

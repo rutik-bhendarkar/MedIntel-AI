@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", () => {
-    const API_BASE = "http://127.0.0.1:5000/api/auth";
+    const API_BASE = window.API_ENDPOINTS.auth;
 
     const requestForm = document.getElementById("requestResetForm");
     const completeForm = document.getElementById("completeResetForm");

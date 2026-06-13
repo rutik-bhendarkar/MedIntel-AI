@@ -6,7 +6,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const rememberMe = document.getElementById("rememberMe");
     const loginButton = loginForm.querySelector(".auth-btn");
 
-    const API_BASE_URL = "https://medintel-ai-dw5w.onrender.com";
+    const { API_BASE_URL } = window;
 
     function parseJwt(token) {
         if (!token) return null;

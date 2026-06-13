@@ -1,6 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
-    const API_BASE = "http://127.0.0.1:5000/api/report";
-    const AUTH_BASE = "http://127.0.0.1:5000/api/auth";
+    const API_BASE = window.API_ENDPOINTS.report;
+    const AUTH_BASE = window.API_ENDPOINTS.auth;
     const ALL_REPORTS_URL = `${API_BASE}/all`;
     const REPORT_CONTEXT_KEY = "latestReportContext";
     const CHAT_ANALYSIS_KEY = "latestChatAnalysis";
