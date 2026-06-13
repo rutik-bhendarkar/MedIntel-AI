@@ -8,10 +8,49 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const API_BASE_URL = "https://medintel-ai-dw5w.onrender.com";
 
+    function parseJwt(token) {
+        if (!token) return null;
+        const parts = token.split('.');
+        if (parts.length !== 3) return null;
+        try {
+            const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+            const json = decodeURIComponent(atob(base64).split('').map(function(c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            return JSON.parse(json);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function isTokenValid(token) {
+        const p = parseJwt(token);
+        if (!p) return false;
+        if (p.exp && typeof p.exp === 'number') {
+            const now = Math.floor(Date.now() / 1000);
+            if (p.exp <= now) return false;
+        }
+        return true;
+    }
+
+    function clearAuthStorage() {
+        try {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            sessionStorage.removeItem('token');
+            sessionStorage.removeItem('user');
+        } catch (e) {}
+    }
+
     const existingToken = localStorage.getItem("token") || sessionStorage.getItem("token");
     if (existingToken) {
-        window.location.href = "dashboard.html";
-        return;
+        if (isTokenValid(existingToken)) {
+            window.location.href = "dashboard.html";
+            return;
+        }
+
+        // token present but invalid/expired/malformed -> clear it and stay on login
+        clearAuthStorage();
     }
 
     loginForm.addEventListener("submit", async (e) => {
