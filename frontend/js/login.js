@@ -6,9 +6,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const rememberMe = document.getElementById("rememberMe");
     const loginButton = loginForm.querySelector(".auth-btn");
 
-    const API_URL = "http://localhost:5000/api/auth/login";
+    const API_BASE_URL = "http://localhost:5000";
 
-    const existingToken = localStorage.getItem("token");
+    const existingToken = localStorage.getItem("token") || sessionStorage.getItem("token");
     if (existingToken) {
         window.location.href = "dashboard.html";
         return;
@@ -35,7 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
         showMessage("Checking credentials...", "loading");
 
         try {
-            const response = await fetch(API_URL, {
+            const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
@@ -43,7 +43,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 body: JSON.stringify({ email, password })
             });
 
-            const data = await response.json();
+            const data = await parseJsonResponse(response);
 
             if (!response.ok || !data.success) {
                 showMessage(data.message || "Invalid email or password.", "error");
@@ -61,7 +61,7 @@ document.addEventListener("DOMContentLoaded", () => {
             storage.setItem("token", data.token);
             storage.setItem("user", JSON.stringify(data.user));
 
-            showMessage(`Welcome back, ${data.user?.full_name || "User"}!`, "success");
+            showMessage(`Welcome back, ${data.user?.full_name || data.user?.email || "User"}!`, "success");
 
             setTimeout(() => {
                 window.location.href = "dashboard.html";
@@ -90,5 +90,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function isValidEmail(email) {
         return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    }
+
+    async function parseJsonResponse(response) {
+        try {
+            return await response.json();
+        } catch (error) {
+            return {
+                success: false,
+                message: response.ok
+                    ? "Invalid server response"
+                    : `Request failed with status ${response.status}`
+            };
+        }
     }
 });
