@@ -6,7 +6,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const rememberMe = document.getElementById("rememberMe");
     const loginButton = loginForm.querySelector(".auth-btn");
 
-    const API_BASE_URL = "http://localhost:5000";
+    const API_BASE_URL = "https://medintel-ai-dw5w.onrender.com";
 
     const existingToken = localStorage.getItem("token") || sessionStorage.getItem("token");
     if (existingToken) {
