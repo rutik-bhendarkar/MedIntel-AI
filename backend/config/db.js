@@ -1,18 +1,34 @@
+const dns = require("dns");
+// Prefer IPv4 results to avoid ENETUNREACH when the environment has limited IPv6
+if (dns.setDefaultResultOrder) {
+    try {
+        dns.setDefaultResultOrder("ipv4first");
+    } catch (e) {}
+}
+
 const { Pool } = require("pg");
 require("dotenv").config();
 
 // Build pool config from DATABASE_URL or individual env vars
-const poolConfig = process.env.DATABASE_URL
-    ? { connectionString: process.env.DATABASE_URL, max: 10 }
-    : {
-            host: process.env.DB_HOST || "localhost",
-            port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 5432,
-            user: process.env.DB_USER || "postgres",
-            password: process.env.DB_PASSWORD || "",
-            database: process.env.DB_NAME || "healthcare_ai_platform",
-            max: 10,
-            idleTimeoutMillis: 30000,
-        };
+const wantSsl = (process.env.DB_SSL === "true") || process.env.FORCE_DB_SSL === "true" || process.env.NODE_ENV === "production";
+
+let poolConfig;
+if (process.env.DATABASE_URL) {
+    poolConfig = { connectionString: process.env.DATABASE_URL, max: 10 };
+    if (wantSsl) poolConfig.ssl = { rejectUnauthorized: false };
+} else {
+    poolConfig = {
+        host: process.env.DB_HOST || "localhost",
+        port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 5432,
+        user: process.env.DB_USER || "postgres",
+        password: process.env.DB_PASSWORD || "",
+        database: process.env.DB_NAME || "healthcare_ai_platform",
+        max: 10,
+        idleTimeoutMillis: 30000,
+    };
+
+    if (wantSsl) poolConfig.ssl = { rejectUnauthorized: false };
+}
 
 const pool = new Pool(poolConfig);
 
