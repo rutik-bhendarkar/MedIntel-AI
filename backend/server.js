@@ -15,20 +15,57 @@ const allowedOrigins = [
   "https://medintel-ai.netlify.app"
 ];
 
-app.use(
-  cors({
-    origin(origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-        return;
-      }
+function normalizeOrigin(o) {
+  if (!o) return o;
+  return String(o).trim().replace(/\/$/, "").toLowerCase();
+}
 
-      callback(new Error("Not allowed by CORS"));
-    },
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
+const corsOptions = {
+  origin(origin, callback) {
+    const incoming = normalizeOrigin(origin);
+    const allowed = allowedOrigins.map(normalizeOrigin);
+
+    // debug log to help diagnose CORS origin mismatches
+    // (safe to leave in; shows only origin and whether it's allowed)
+    try {
+      console.log(`[CORS-check] incoming='${incoming}' allowed=${allowed.join(",")}`);
+    } catch (e) {}
+
+    if (!incoming) {
+      // no origin (e.g., curl, server-to-server) — allow
+      callback(null, true);
+      return;
+    }
+
+    if (allowed.includes(incoming)) {
+      callback(null, true);
+      return;
+    }
+
+    // Do not throw an error here — return false so CORS middleware does not
+    // set CORS headers for disallowed origins. This avoids 500 responses for
+    // preflight requests from unknown origins.
+    callback(null, false);
+  },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "Accept", "Origin"],
+  optionsSuccessStatus: 204,
+  preflightContinue: false,
+  credentials: false,
+};
+
+// Apply CORS middleware and ensure OPTIONS preflight is handled
+app.use(cors(corsOptions));
+
+// Debug log for auth routes to confirm CORS response headers
+app.use((req, res, next) => {
+  res.on("finish", () => {
+    if (req.path && req.path.startsWith("/api/auth")) {
+      console.log(`[CORS] ${req.method} ${req.path} Origin=${req.headers.origin} ACAO=${res.getHeader("Access-Control-Allow-Origin")}`);
+    }
+  });
+  next();
+});
 
 app.use(express.json());
 
