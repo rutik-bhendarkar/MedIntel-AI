@@ -1390,7 +1390,9 @@ function generateFutureForecast(session, result) {
 exports.askChatbot = async (req, res) => {
   try {
     const message = String(req.body?.message || "").trim();
-    const sessionId = String(req.body?.sessionId || "default-session");
+    const sessionId = (req.body?.sessionId && String(req.body.sessionId).trim())
+      ? String(req.body.sessionId).trim()
+      : (req.headers['x-session-id'] || `anon-${Date.now()}-${Math.random().toString(36).slice(2,9)}`);
     const selectedReportContext =
       req.body?.selectedReportContext && typeof req.body.selectedReportContext === "object"
         ? req.body.selectedReportContext
@@ -1409,13 +1411,24 @@ exports.askChatbot = async (req, res) => {
       session.reportContext = selectedReportContext;
     }
 
+    // debug: raw input before processing
+    console.log("INPUT:", message);
+
     updateSessionWithMessage(session, message);
+
+    // debug: extracted canonical symptoms after update
+    console.log("EXTRACTED:", session.symptoms);
 
     const topScores = scoreConditions(session);
     const followUps = filterNewFollowUps(session, buildFollowUps(session));
 
     const result = buildResponse(session, topScores, followUps);
+
+    // debug: final computed response object
+    console.log("FINAL RESPONSE:", result);
+
     console.log("[SYMPTOM_DEBUG]", JSON.stringify({
+      sessionId,
       raw_user_message: message,
       extracted_symptoms: session.symptoms,
       matched_patterns: result.matchedPatterns,
