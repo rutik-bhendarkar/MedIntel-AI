@@ -385,16 +385,21 @@ const analyzeUploadedReport = (req, res) => {
 
         python.stdout.on("data", (data) => {
             const s = data.toString();
+            // immediate log for real-time visibility
+            console.log("PYTHON STDOUT:", s);
             output += s;
         });
 
         python.stderr.on("data", (data) => {
             const s = data.toString();
+            // immediate log for real-time visibility
+            console.error("PYTHON STDERR:", s);
             errorOutput += s;
         });
 
         python.on("error", (error) => {
             console.error("REPORT ERROR: Python analyzer spawn failed:", error);
+            console.error("PYTHON PROCESS ERROR:", error);
             console.error("PYTHON STDERR:", errorOutput);
             console.error("PYTHON STDOUT:", output);
             fs.unlink(filePath, () => {});
@@ -402,19 +407,19 @@ const analyzeUploadedReport = (req, res) => {
         });
 
         python.on("close", (code) => {
+            // Log exit code explicitly
+            console.log("PYTHON EXIT CODE:", code);
+
             fs.unlink(filePath, () => {});
 
-            // Always log full Python outputs for diagnostics
-            console.error("PYTHON STDERR:", errorOutput);
-            console.error("PYTHON STDOUT:", output);
-
             if (code !== 0) {
-                // Try to extract a traceback line for quick reference
-                const tbMatch = errorOutput && errorOutput.match(/File "(.+?)", line (\d+)/);
+                // Try to extract a traceback line for quick reference (from stderr)
+                const tbMatch = errorOutput && errorOutput.match(/File \"(.+?)\", line (\\d+)/);
                 const traceback_line = tbMatch ? `${tbMatch[1]}:${tbMatch[2]}` : null;
 
                 console.error("REPORT ERROR: Python analyzer exited with code", code, "traceback_line:", traceback_line);
-                return res.status(500).json({ success: false, message: "Analysis failed", error: errorOutput, traceback_line });
+                // include both stdout and stderr in the response for diagnostics
+                return res.status(500).json({ success: false, message: "Analysis failed", stdout: output, stderr: errorOutput, traceback_line });
             }
 
             let analysisResult;
