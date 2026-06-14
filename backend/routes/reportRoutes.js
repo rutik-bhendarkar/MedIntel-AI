@@ -321,32 +321,100 @@ const analyzeUploadedReport = (req, res) => {
         }
 
         const filePath = req.file.path;
+
+        // Resolve Python script path and log environment for easier debugging on Render
+        const scriptPath = path.resolve(__dirname, "../analyze_report.py");
+        console.log(`[REPORT] Python script path: ${scriptPath}`);
+        console.log(`[REPORT] Working directory: ${process.cwd()}`);
+        console.log(`[REPORT] Uploaded file path: ${filePath} (exists=${fs.existsSync(filePath)})`);
+
+        if (!fs.existsSync(filePath)) {
+            console.error("REPORT ERROR: Uploaded file does not exist:", filePath);
+            return res.status(400).json({ success: false, message: "Uploaded file not found on server" });
+        }
+        if (!fs.existsSync(scriptPath)) {
+            console.error("REPORT ERROR: Python analyzer script not found at:", scriptPath);
+
+            // Attempt a lightweight Node.js fallback using pdf-parse if available
+            try {
+                const pdfParse = require("pdf-parse");
+                const buffer = fs.readFileSync(filePath);
+                pdfParse(buffer).then(({ text }) => {
+                    const analysisResult = { status: "success", uploaded_file: filePath, extracted_text: String(text || ""), report_type: [], findings: [], recommendations: [], risk_level: "LOW", confidence: 0.5 };
+                    const uploadedAt = new Date().toISOString();
+                    const enhancedAnalysis = buildEnhancedAnalysis(analysisResult, uploadedAt);
+
+                    const reportType = Array.isArray(analysisResult.report_type) ? analysisResult.report_type.join(", ") : analysisResult.report_type;
+                    const reportName = req.file.filename;
+                    const findings = Array.isArray(analysisResult.findings) ? analysisResult.findings.join(", ") : analysisResult.findings || "";
+                    const riskLevel = analysisResult.risk_level || "LOW";
+
+                    const sql = `
+                        INSERT INTO report_history
+                        (user_id, report_name, report_type, risk_level, findings, recommendations, uploaded_at)
+                        VALUES (?, ?, ?, ?, ?, ?, NOW())
+                    `;
+
+                    pool.query(sql, [userId, reportName, reportType, riskLevel, findings, enhancedAnalysis.recommendations.join("; ")], (dbErr, dbResult) => {
+                        if (dbErr) {
+                            console.error("REPORT ERROR: DB insert failed (pdf-parse fallback):", dbErr);
+                            return res.status(500).json({ success: false, message: "Report analyzed but could not be saved", error: dbErr.message });
+                        }
+
+                        return res.status(200).json({ status: "success", report_id: dbResult.insertId, uploaded_at: uploadedAt, analysis: enhancedAnalysis });
+                    });
+                }).catch((pdfErr) => {
+                    console.error("REPORT ERROR: pdf-parse fallback failed:", pdfErr);
+                    return res.status(500).json({ success: false, message: "Analyzer not available and Node fallback failed", error: String(pdfErr && pdfErr.message ? pdfErr.message : pdfErr) });
+                });
+            } catch (fallbackErr) {
+                console.error("REPORT ERROR: No Python analyzer and pdf-parse not installed:", fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr);
+                return res.status(500).json({ success: false, message: "Analyzer not available on server; install Python or add pdf-parse dependency", error: String(fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr) });
+            }
+
+            return;
+        }
+
         const pythonCommand = process.platform === "win32" ? "python" : "python3";
-        const python = spawn(pythonCommand, [path.join(__dirname, "../analyze_report.py"), filePath]);
+        console.log(`[REPORT] Spawning Python (${pythonCommand}) ${scriptPath} ${filePath}`);
+
+        const python = spawn(pythonCommand, [scriptPath, filePath], { cwd: path.dirname(scriptPath) });
 
         let output = "";
         let errorOutput = "";
 
         python.stdout.on("data", (data) => {
-            output += data.toString();
+            const s = data.toString();
+            output += s;
         });
 
         python.stderr.on("data", (data) => {
-            errorOutput += data.toString();
+            const s = data.toString();
+            errorOutput += s;
         });
 
         python.on("error", (error) => {
             console.error("REPORT ERROR: Python analyzer spawn failed:", error);
+            console.error("PYTHON STDERR:", errorOutput);
+            console.error("PYTHON STDOUT:", output);
             fs.unlink(filePath, () => {});
-            return res.status(500).json({ success: false, message: "Could not start Python analyzer", error: error.message });
+            return res.status(500).json({ success: false, message: "Could not start Python analyzer", error: error.message, stdout: output, stderr: errorOutput });
         });
 
         python.on("close", (code) => {
             fs.unlink(filePath, () => {});
 
+            // Always log full Python outputs for diagnostics
+            console.error("PYTHON STDERR:", errorOutput);
+            console.error("PYTHON STDOUT:", output);
+
             if (code !== 0) {
-                console.error("REPORT ERROR: Python analyzer exited with code", code, "stderr:", errorOutput);
-                return res.status(500).json({ success: false, message: "Analysis failed", error: errorOutput });
+                // Try to extract a traceback line for quick reference
+                const tbMatch = errorOutput && errorOutput.match(/File "(.+?)", line (\d+)/);
+                const traceback_line = tbMatch ? `${tbMatch[1]}:${tbMatch[2]}` : null;
+
+                console.error("REPORT ERROR: Python analyzer exited with code", code, "traceback_line:", traceback_line);
+                return res.status(500).json({ success: false, message: "Analysis failed", error: errorOutput, traceback_line });
             }
 
             let analysisResult;
@@ -355,7 +423,9 @@ const analyzeUploadedReport = (req, res) => {
                 analysisResult = JSON.parse(output.trim());
             } catch (parseError) {
                 console.error("REPORT ERROR: Failed to parse analysis result:", parseError, "rawOutput:", output);
-                return res.status(500).json({ success: false, message: "Failed to parse analysis result", error: parseError.message });
+                console.error("PYTHON STDERR:", errorOutput);
+                console.error("PYTHON STDOUT:", output);
+                return res.status(500).json({ success: false, message: "Failed to parse analysis result", error: parseError.message, stdout: output, stderr: errorOutput });
             }
 
             const reportType = Array.isArray(analysisResult.report_type)

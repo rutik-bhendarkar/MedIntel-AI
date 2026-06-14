@@ -1,0 +1,6 @@
+# Python dependencies for analyze_report.py
+# Note: Tesseract OCR (system package) must be installed for pytesseract to work.
+PyPDF2
+Pillow
+pytesseract
+PyMuPDF
