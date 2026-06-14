@@ -76,7 +76,10 @@ function parseList(value) {
             const parsed = JSON.parse(trimmed);
             return Array.isArray(parsed) ? parsed : [trimmed];
         } catch (error) {
-            return trimmed.split(/\r?\n|;/).map((item) => item.trim()).filter(Boolean);
+            return trimmed
+                .split(/\r?\n|;/)
+                .map((item) => item.trim())
+                .filter(Boolean);
         }
     }
 
@@ -174,11 +177,6 @@ function extractMedicalDataFromText(text = "") {
     return data;
 }
 
-function normalizeRiskText(value) {
-    const text = String(value || "Unknown").trim();
-    return text ? text.charAt(0).toUpperCase() + text.slice(1).toLowerCase() : "Unknown";
-}
-
 function getReportCategory(reportType = "") {
     const text = String(reportType).toLowerCase();
 
@@ -269,9 +267,11 @@ function buildEnhancedAnalysis(analysisResult, uploadedAt) {
         : medicalAnalysis.length
             ? `Detected ${getReportCategory(reportType).toLowerCase()} values are within expected ranges. Keep this as a baseline.`
             : analysisResult.simplified_explanation || buildAnalysisSummary(analysisResult);
+
     const doctorSummary = abnormalValues.length
         ? abnormalValues.map((item) => `${item.test}: ${item.value} ${item.unit} (${item.status}, ref ${item.normalRange || "-"})`).join("; ")
         : "No abnormal structured markers extracted from the uploaded report.";
+
     const actionPlan = recommendations.slice(0, 5);
     const confidenceScore = Math.round(Number(analysisResult.confidence || 0.55) * 100);
 
@@ -321,9 +321,8 @@ const analyzeUploadedReport = (req, res) => {
         }
 
         const filePath = req.file.path;
-
-        // Resolve Python script path and log environment for easier debugging on Render
         const scriptPath = path.resolve(__dirname, "../analyze_report.py");
+
         console.log(`[REPORT] Python script path: ${scriptPath}`);
         console.log(`[REPORT] Working directory: ${process.cwd()}`);
         console.log(`[REPORT] Uploaded file path: ${filePath} (exists=${fs.existsSync(filePath)})`);
@@ -332,44 +331,85 @@ const analyzeUploadedReport = (req, res) => {
             console.error("REPORT ERROR: Uploaded file does not exist:", filePath);
             return res.status(400).json({ success: false, message: "Uploaded file not found on server" });
         }
+
         if (!fs.existsSync(scriptPath)) {
             console.error("REPORT ERROR: Python analyzer script not found at:", scriptPath);
 
-            // Attempt a lightweight Node.js fallback using pdf-parse if available
             try {
                 const pdfParse = require("pdf-parse");
                 const buffer = fs.readFileSync(filePath);
-                pdfParse(buffer).then(({ text }) => {
-                    const analysisResult = { status: "success", uploaded_file: filePath, extracted_text: String(text || ""), report_type: [], findings: [], recommendations: [], risk_level: "LOW", confidence: 0.5 };
-                    const uploadedAt = new Date().toISOString();
-                    const enhancedAnalysis = buildEnhancedAnalysis(analysisResult, uploadedAt);
 
-                    const reportType = Array.isArray(analysisResult.report_type) ? analysisResult.report_type.join(", ") : analysisResult.report_type;
-                    const reportName = req.file.filename;
-                    const findings = Array.isArray(analysisResult.findings) ? analysisResult.findings.join(", ") : analysisResult.findings || "";
-                    const riskLevel = analysisResult.risk_level || "LOW";
+                pdfParse(buffer)
+                    .then(({ text }) => {
+                        const analysisResult = {
+                            status: "success",
+                            uploaded_file: filePath,
+                            extracted_text: String(text || ""),
+                            report_type: [],
+                            findings: [],
+                            recommendations: [],
+                            risk_level: "LOW",
+                            confidence: 0.5
+                        };
 
-                    const sql = `
-                        INSERT INTO report_history
-                        (user_id, report_name, report_type, risk_level, findings, recommendations, uploaded_at)
-                        VALUES (?, ?, ?, ?, ?, ?, NOW())
-                    `;
+                        const uploadedAt = new Date().toISOString();
+                        const enhancedAnalysis = buildEnhancedAnalysis(analysisResult, uploadedAt);
 
-                    pool.query(sql, [userId, reportName, reportType, riskLevel, findings, enhancedAnalysis.recommendations.join("; ")], (dbErr, dbResult) => {
-                        if (dbErr) {
-                            console.error("REPORT ERROR: DB insert failed (pdf-parse fallback):", dbErr);
-                            return res.status(500).json({ success: false, message: "Report analyzed but could not be saved", error: dbErr.message });
-                        }
+                        const reportType = Array.isArray(analysisResult.report_type)
+                            ? analysisResult.report_type.join(", ")
+                            : analysisResult.report_type;
+                        const reportName = req.file.filename;
+                        const findings = Array.isArray(analysisResult.findings)
+                            ? analysisResult.findings.join(", ")
+                            : analysisResult.findings || "";
+                        const riskLevel = analysisResult.risk_level || "LOW";
 
-                        return res.status(200).json({ status: "success", report_id: dbResult.insertId, uploaded_at: uploadedAt, analysis: enhancedAnalysis });
+                        const sql = `
+                            INSERT INTO report_history
+                            (user_id, report_name, report_type, risk_level, findings, recommendations, uploaded_at)
+                            VALUES (?, ?, ?, ?, ?, ?, NOW())
+                        `;
+
+                        pool.query(
+                            sql,
+                            [userId, reportName, reportType, riskLevel, findings, enhancedAnalysis.recommendations.join("; ")],
+                            (dbErr, dbResult) => {
+                                if (dbErr) {
+                                    console.error("REPORT ERROR: DB insert failed (pdf-parse fallback):", dbErr);
+                                    return res.status(500).json({
+                                        success: false,
+                                        message: "Report analyzed but could not be saved",
+                                        error: dbErr.message
+                                    });
+                                }
+
+                                return res.status(200).json({
+                                    status: "success",
+                                    report_id: dbResult.insertId,
+                                    uploaded_at: uploadedAt,
+                                    analysis: enhancedAnalysis
+                                });
+                            }
+                        );
+                    })
+                    .catch((pdfErr) => {
+                        console.error("REPORT ERROR: pdf-parse fallback failed:", pdfErr);
+                        return res.status(500).json({
+                            success: false,
+                            message: "Analyzer not available and Node fallback failed",
+                            error: String(pdfErr && pdfErr.message ? pdfErr.message : pdfErr)
+                        });
                     });
-                }).catch((pdfErr) => {
-                    console.error("REPORT ERROR: pdf-parse fallback failed:", pdfErr);
-                    return res.status(500).json({ success: false, message: "Analyzer not available and Node fallback failed", error: String(pdfErr && pdfErr.message ? pdfErr.message : pdfErr) });
-                });
             } catch (fallbackErr) {
-                console.error("REPORT ERROR: No Python analyzer and pdf-parse not installed:", fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr);
-                return res.status(500).json({ success: false, message: "Analyzer not available on server; install Python or add pdf-parse dependency", error: String(fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr) });
+                console.error(
+                    "REPORT ERROR: No Python analyzer and pdf-parse not installed:",
+                    fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr
+                );
+                return res.status(500).json({
+                    success: false,
+                    message: "Analyzer not available on server; install Python or add pdf-parse dependency",
+                    error: String(fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr)
+                });
             }
 
             return;
@@ -378,21 +418,21 @@ const analyzeUploadedReport = (req, res) => {
         const pythonCommand = process.platform === "win32" ? "python" : "python3";
         console.log(`[REPORT] Spawning Python (${pythonCommand}) ${scriptPath} ${filePath}`);
 
-        const python = spawn(pythonCommand, [scriptPath, filePath], { cwd: path.dirname(scriptPath) });
+        const python = spawn(pythonCommand, [scriptPath, filePath], {
+            cwd: path.dirname(scriptPath)
+        });
 
         let output = "";
         let errorOutput = "";
 
         python.stdout.on("data", (data) => {
             const s = data.toString();
-            // immediate log for real-time visibility
             console.log("PYTHON STDOUT:", s);
             output += s;
         });
 
         python.stderr.on("data", (data) => {
             const s = data.toString();
-            // immediate log for real-time visibility
             console.error("PYTHON STDERR:", s);
             errorOutput += s;
         });
@@ -403,23 +443,33 @@ const analyzeUploadedReport = (req, res) => {
             console.error("PYTHON STDERR:", errorOutput);
             console.error("PYTHON STDOUT:", output);
             fs.unlink(filePath, () => {});
-            return res.status(500).json({ success: false, message: "Could not start Python analyzer", error: error.message, stdout: output, stderr: errorOutput });
+            return res.status(500).json({
+                success: false,
+                message: "Could not start Python analyzer",
+                error: error.message,
+                stdout: output,
+                stderr: errorOutput
+            });
         });
 
         python.on("close", (code) => {
-            // Log exit code explicitly
             console.log("PYTHON EXIT CODE:", code);
 
             fs.unlink(filePath, () => {});
 
             if (code !== 0) {
-                // Try to extract a traceback line for quick reference (from stderr)
-                const tbMatch = errorOutput && errorOutput.match(/File \"(.+?)\", line (\\d+)/);
+                const tbMatch = errorOutput && errorOutput.match(/File \"(.+?)\", line (\d+)/);
                 const traceback_line = tbMatch ? `${tbMatch[1]}:${tbMatch[2]}` : null;
 
                 console.error("REPORT ERROR: Python analyzer exited with code", code, "traceback_line:", traceback_line);
-                // include both stdout and stderr in the response for diagnostics
-                return res.status(500).json({ success: false, message: "Analysis failed", stdout: output, stderr: errorOutput, traceback_line });
+
+                return res.status(500).json({
+                    success: false,
+                    message: "Analysis failed",
+                    stdout: output,
+                    stderr: errorOutput,
+                    traceback_line
+                });
             }
 
             let analysisResult;
@@ -430,7 +480,14 @@ const analyzeUploadedReport = (req, res) => {
                 console.error("REPORT ERROR: Failed to parse analysis result:", parseError, "rawOutput:", output);
                 console.error("PYTHON STDERR:", errorOutput);
                 console.error("PYTHON STDOUT:", output);
-                return res.status(500).json({ success: false, message: "Failed to parse analysis result", error: parseError.message, stdout: output, stderr: errorOutput });
+
+                return res.status(500).json({
+                    success: false,
+                    message: "Failed to parse analysis result",
+                    error: parseError.message,
+                    stdout: output,
+                    stderr: errorOutput
+                });
             }
 
             const reportType = Array.isArray(analysisResult.report_type)
@@ -440,9 +497,6 @@ const analyzeUploadedReport = (req, res) => {
             const findings = Array.isArray(analysisResult.findings)
                 ? analysisResult.findings.join(", ")
                 : analysisResult.findings || "";
-            const recommendations = Array.isArray(analysisResult.recommendations)
-                ? analysisResult.recommendations.join(", ")
-                : analysisResult.recommendations || "";
             const riskLevel = analysisResult.risk_level || "LOW";
             const uploadedAt = new Date().toISOString();
             const enhancedAnalysis = buildEnhancedAnalysis(analysisResult, uploadedAt);
@@ -453,18 +507,35 @@ const analyzeUploadedReport = (req, res) => {
                 VALUES (?, ?, ?, ?, ?, ?, NOW())
             `;
 
-            pool.query(sql, [userId, reportName, reportType, riskLevel, findings, enhancedAnalysis.recommendations.join("; ")], (dbErr, dbResult) => {
-                if (dbErr) {
-                    console.error("REPORT ERROR: DB insert failed:", dbErr);
-                    return res.status(500).json({ success: false, message: "Report analyzed but could not be saved", error: dbErr.message });
-                }
+            pool.query(
+                sql,
+                [userId, reportName, reportType, riskLevel, findings, enhancedAnalysis.recommendations.join("; ")],
+                (dbErr, dbResult) => {
+                    if (dbErr) {
+                        console.error("REPORT ERROR: DB insert failed:", dbErr);
+                        return res.status(500).json({
+                            success: false,
+                            message: "Report analyzed but could not be saved",
+                            error: dbErr.message
+                        });
+                    }
 
-                return res.status(200).json({ status: "success", report_id: dbResult.insertId, uploaded_at: uploadedAt, analysis: enhancedAnalysis });
-            });
+                    return res.status(200).json({
+                        status: "success",
+                        report_id: dbResult.insertId,
+                        uploaded_at: uploadedAt,
+                        analysis: enhancedAnalysis
+                    });
+                }
+            );
         });
     } catch (error) {
         console.error("REPORT ERROR:", error);
-        return res.status(500).json({ success: false, message: "Internal server error", error: String(error && error.message ? error.message : error) });
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
+            error: String(error && error.message ? error.message : error)
+        });
     }
 };
 
@@ -503,7 +574,11 @@ router.post("/export-pdf", (req, res) => {
         sendPdf(res, summary);
     } catch (error) {
         console.error("REPORT ERROR: /export-pdf failed:", error);
-        return res.status(500).json({ success: false, message: "Could not create PDF", error: error && error.message ? error.message : String(error) });
+        return res.status(500).json({
+            success: false,
+            message: "Could not create PDF",
+            error: error && error.message ? error.message : String(error)
+        });
     }
 });
 
@@ -523,7 +598,10 @@ router.get("/:id/pdf", authMiddleware, (req, res) => {
         pool.query(sql, [req.params.id, req.user.id], (err, results) => {
             if (err) {
                 console.error("REPORT ERROR: /:id/pdf DB error:", err);
-                return res.status(500).json({ message: "Database Error", error: err && err.message ? err.message : String(err) });
+                return res.status(500).json({
+                    message: "Database Error",
+                    error: err && err.message ? err.message : String(err)
+                });
             }
 
             if (!results || !results.length) {
@@ -536,7 +614,10 @@ router.get("/:id/pdf", authMiddleware, (req, res) => {
         });
     } catch (error) {
         console.error("REPORT ERROR:", error);
-        return res.status(500).json({ message: "Internal server error", error: error && error.message ? error.message : String(error) });
+        return res.status(500).json({
+            message: "Internal server error",
+            error: error && error.message ? error.message : String(error)
+        });
     }
 });
 
