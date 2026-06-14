@@ -10,15 +10,12 @@ const DISCLAIMER =
 function normalize(text = "") {
   return String(text)
     .toLowerCase()
+    .replace(/[’]/g, "'")
     .replace(/fewer/gim, "fever")
     .replace(/bodypain/gim, "body pain")
     .replace(/head ache/gim, "headache")
     .replace(/vomting/gim, "vomiting")
-    .replace(/diziness/gim, "dizziness")
-    .replace(/breathing issue/gim, "breathing difficulty")
-    .replace(/difficulty breathing/gim, "breathing difficulty")
-    .replace(/short of breath/gim, "shortness of breath")
-    .replace(/short breath/gim, "shortness of breath");
+    .replace(/diziness/gim, "dizziness");
 }
 
 function createSession() {
@@ -53,6 +50,35 @@ function createSession() {
   };
 }
 
+function phraseRegex(phrase) {
+  const escaped = String(phrase)
+    .trim()
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    .replace(/\s+/g, "\\s+");
+
+  return new RegExp(`(^|[^a-z0-9])${escaped}(?=$|[^a-z0-9])`, "i");
+}
+
+function hasPhrase(text, phrases) {
+  return phrases.some((phrase) => phraseRegex(phrase).test(text));
+}
+
+function phraseIndex(text, phrases) {
+  let firstIndex = -1;
+
+  for (const phrase of phrases) {
+    const match = phraseRegex(phrase).exec(text);
+    if (!match) continue;
+
+    const index = match.index + (match[1] ? match[1].length : 0);
+    if (firstIndex === -1 || index < firstIndex) {
+      firstIndex = index;
+    }
+  }
+
+  return firstIndex;
+}
+
 function getSession(sessionId) {
   if (!sessionStore.has(sessionId)) {
     sessionStore.set(sessionId, createSession());
@@ -62,7 +88,7 @@ function getSession(sessionId) {
 
 function extractSymptoms(message) {
   const text = normalize(message);
-  const symptoms = [];
+  const matches = [];
 
   const symptomMap = [
     ["fever", ["fever"]],
@@ -70,17 +96,19 @@ function extractSymptoms(message) {
     ["body pain", ["body pain", "body ache", "muscle pain"]],
     ["stomach pain", ["stomach pain", "abdominal pain", "belly pain", "stomach ache"]],
     ["nausea", ["nausea", "nauseous"]],
-    ["chest pain", ["chest pain", "chest pressure", "chest tightness"]],
-    ["breathing difficulty", ["breathing difficulty", "difficulty breathing", "shortness of breath", "short of breath", "breathless", "breathlessness", "hard to breathe"]],
+    ["chest pain", ["chest pain", "pain in chest", "chest tightness", "chest pressure"]],
+    ["shortness of breath", ["shortness of breath"]],
+    ["breathing difficulty", ["breathing difficulty", "difficulty breathing", "can't breathe"]],
     ["headache", ["headache", "head pain"]],
     ["dizziness", ["dizziness", "dizzy"]],
-    ["weakness", ["weakness", "fatigue", "tired", "weak"]],
+    ["fatigue", ["fatigue", "tired", "weakness", "weak"]],
+    ["arm pain", ["arm pain", "pain in arm", "left arm pain", "right arm pain"]],
     ["vomiting", ["vomiting", "vomit"]],
     ["diarrhea", ["diarrhea", "loose motion"]],
     ["sweating", ["sweating", "sweaty", "cold sweat", "cold sweats"]],
     ["sore throat", ["sore throat"]],
-    ["thirst", ["thirst", "very thirsty"]],
-    ["urination", ["frequent urination", "urinating more"]],
+    ["thirst", ["thirst", "thirsty", "very thirsty"]],
+    ["frequent urination", ["frequent urination", "urinating more"]],
     ["confusion", ["confusion", "confused"]],
     ["fainting", ["fainting", "passed out", "syncope"]],
     ["blurred vision", ["blurred vision", "double vision", "vision problem", "vision problems"]],
@@ -90,12 +118,16 @@ function extractSymptoms(message) {
   ];
 
   for (const [canonical, keywords] of symptomMap) {
-    if (keywords.some((k) => text.includes(k))) {
-      symptoms.push(canonical);
+    const index = phraseIndex(text, keywords);
+    if (index >= 0) {
+      matches.push({ canonical, index });
     }
   }
 
-  return [...new Set(symptoms)];
+  return matches
+    .sort((a, b) => a.index - b.index)
+    .map((match) => match.canonical)
+    .filter((symptom, index, symptoms) => symptoms.indexOf(symptom) === index);
 }
 
 function parseSeverity(message, options = {}) {
@@ -207,7 +239,7 @@ function getFollowUpKey(question) {
   if (text.includes("1 to 10") || text.includes("severe")) return "severity";
   if (text.includes("getting worse") || text.includes("worse over time")) return "progression";
   if (text.includes("arm") || text.includes("jaw") || text.includes("back")) return "cardiac";
-  if (text.includes("breathing difficulty")) return "respiratory";
+  if (text.includes("breathing difficulty") || text.includes("shortness of breath")) return "respiratory";
   if (text.includes("fluids")) return "gastro";
   if (text.includes("blurred vision") || text.includes("confusion")) return "neuro";
   if (text.includes("symptom")) return "symptoms";
@@ -262,7 +294,8 @@ function applyActiveQuestionAnswer(session, message) {
   }
 
   if (activeQuestion === "respiratory") {
-    if (isYesAnswer(message) || extractSymptoms(message).includes("breathing difficulty")) {
+    const extracted = extractSymptoms(message);
+    if (isYesAnswer(message) || extracted.includes("breathing difficulty") || extracted.includes("shortness of breath")) {
       addUnique(session.symptoms, "breathing difficulty");
       completeQuestion(session, "respiratory");
       return;
@@ -378,7 +411,7 @@ function updateSessionWithMessage(session, message) {
 
   if (
     session.symptoms.some((s) =>
-      ["fever", "cough", "body pain", "headache", "weakness"].includes(s)
+      ["fever", "cough", "body pain", "headache", "fatigue"].includes(s)
     )
   ) {
     completeQuestion(session, "associated");
@@ -406,7 +439,7 @@ function scoreConditions(session) {
     { label: "Viral / flu pattern", score: 0 },
     { label: "Respiratory pattern", score: 0 },
     { label: "Cardiac pattern", score: 0 },
-    { label: "Metabolic / blood sugar pattern", score: 0 },
+    { label: "Metabolic / Blood Sugar", score: 0 },
     { label: "Neurological pattern", score: 0 },
     { label: "Gastrointestinal pattern", score: 0 },
     { label: "Skin / allergy pattern", score: 0 }
@@ -418,24 +451,26 @@ function scoreConditions(session) {
   if (has("cough")) scores[0].score += 20;
   if (has("body pain")) scores[0].score += 18;
   if (has("headache")) scores[0].score += 10;
-  if (has("weakness")) scores[0].score += 10;
+  if (has("fatigue")) scores[0].score += 10;
   if (has("sore throat")) scores[0].score += 10;
 
   if (has("cough")) scores[1].score += 20;
-  if (has("breathing difficulty")) scores[1].score += 35;
+  if (has("breathing difficulty") || has("shortness of breath")) scores[1].score += 35;
   if (has("sore throat")) scores[1].score += 15;
   if (has("fever")) scores[1].score += 8;
 
   if (has("chest pain")) scores[2].score += 40;
-  if (has("sweating")) scores[2].score += 15;
-  if (has("breathing difficulty")) scores[2].score += 15;
+  if (has("chest pain") && has("sweating")) scores[2].score += 15;
+  if (has("chest pain") && (has("breathing difficulty") || has("shortness of breath"))) scores[2].score += 20;
   if (has("fainting")) scores[2].score += 20;
-  if (has("dizziness")) scores[2].score += 8;
+  if (has("chest pain") && has("dizziness")) scores[2].score += 15;
+  if (has("chest pain") && has("arm pain")) scores[2].score += 20;
   if (has("palpitations")) scores[2].score += 20;
 
   if (has("thirst")) scores[3].score += 20;
-  if (has("urination")) scores[3].score += 20;
-  if (has("weakness")) scores[3].score += 10;
+  if (has("frequent urination")) scores[3].score += 20;
+  if (has("fatigue")) scores[3].score += 10;
+  if (has("blurred vision")) scores[3].score += 12;
 
   if (session.riskFactors.includes("diabetes")) {
     scores[3].score += 15;
@@ -454,13 +489,13 @@ function scoreConditions(session) {
 
   if (has("rash")) scores[6].score += 30;
   if (has("swelling")) scores[6].score += 24;
-  if (has("breathing difficulty") && has("swelling")) scores[6].score += 25;
+  if ((has("breathing difficulty") || has("shortness of breath")) && has("swelling")) scores[6].score += 25;
 
   if (has("fever") && has("cough") && has("body pain")) {
     scores[0].score += 15;
   }
 
-  if (!has("chest pain") && !has("sweating") && !has("breathing difficulty") && !has("palpitations")) {
+  if (!has("chest pain") && !has("breathing difficulty") && !has("shortness of breath") && !has("palpitations")) {
     scores[2].score -= 20;
   }
 
@@ -482,6 +517,11 @@ function calculateRiskLevel(session) {
   const emergencySignals = session.emergencySignals || [];
   const has = (s) => symptoms.includes(s);
   const hasSignal = (signal) => emergencySignals.includes(signal);
+  const hasBreathing = has("shortness of breath") || has("breathing difficulty");
+  const mildOnlySymptoms = ["sweating", "fatigue", "headache"];
+  const persistent = session.duration && session.duration.value >= 7;
+
+  let riskScore = 10;
 
   // =====================================
   // HIGH EMERGENCY CASES
@@ -489,14 +529,14 @@ function calculateRiskLevel(session) {
 
   if (
     has("chest pain") &&
-    (has("breathing difficulty") ||
-      has("sweating") ||
-      has("fainting") ||
-      has("palpitations") ||
+    (hasBreathing ||
+      has("dizziness") ||
+      has("arm pain") ||
       hasSignal("radiating chest pain"))
   ) {
     return {
       level: "high",
+      riskScore: 90,
       emergency: true,
       message:
         "Chest symptoms with warning signs can be serious. Please seek immediate medical attention."
@@ -510,6 +550,7 @@ function calculateRiskLevel(session) {
   ) {
     return {
       level: "high",
+      riskScore: 90,
       emergency: true,
       message:
         "Emergency neurological warning signs detected."
@@ -517,11 +558,12 @@ function calculateRiskLevel(session) {
   }
 
   if (
-    has("breathing difficulty") &&
+    hasBreathing &&
     ((session.severity || 0) >= 7 || has("swelling"))
   ) {
     return {
       level: "high",
+      riskScore: 85,
       emergency: true,
       message:
         "Severe breathing difficulty can become urgent and needs prompt medical care."
@@ -532,17 +574,28 @@ function calculateRiskLevel(session) {
   // MEDIUM RISK
   // =====================================
 
+  if (has("chest pain")) {
+    return {
+      level: "medium",
+      riskScore: 55,
+      emergency: false,
+      message:
+        "Chest pain should be monitored carefully and reviewed if it persists, worsens, or comes with other warning signs."
+    };
+  }
+
   if (
     hasSignal("unable to keep fluids down") ||
-    symptoms.includes("breathing difficulty") ||
+    hasBreathing ||
     symptoms.includes("vomiting") ||
     symptoms.includes("diarrhea")
   ) {
     return {
       level: "medium",
+      riskScore: 50,
       emergency: false,
       message:
-        symptoms.includes("breathing difficulty")
+        hasBreathing
           ? "Breathing symptoms should be monitored carefully."
           : "Monitor hydration and symptom progression carefully."
     };
@@ -551,27 +604,54 @@ function calculateRiskLevel(session) {
   if ((session.severity || 0) >= 7) {
     return {
       level: "medium",
+      riskScore: 45,
       emergency: false,
       message:
         "Symptoms appear moderately severe."
     };
   }
 
-  if (session.duration && session.duration.value >= 7) {
+  if (persistent) {
     return {
       level: "medium",
+      riskScore: 45,
       emergency: false,
       message:
         "Symptoms have persisted long enough to consider medical review."
     };
   }
 
+  if (
+    has("thirst") &&
+    has("frequent urination") &&
+    (has("fatigue") || has("blurred vision"))
+  ) {
+    return {
+      level: "medium",
+      riskScore: 45,
+      emergency: false,
+      message:
+        "The symptom pattern may fit blood sugar imbalance and should be reviewed if it persists."
+    };
+  }
+
   if (session.progression === "worsening" && symptoms.length > 0) {
     return {
       level: "medium",
+      riskScore: 45,
       emergency: false,
       message:
         "Symptoms are worsening and should be monitored carefully."
+    };
+  }
+
+  if (symptoms.length >= 2 && symptoms.length <= 3) {
+    return {
+      level: "medium",
+      riskScore: 40,
+      emergency: false,
+      message:
+        "Multiple symptoms are present, so monitoring and medical advice may be useful if they persist or worsen."
     };
   }
 
@@ -579,8 +659,13 @@ function calculateRiskLevel(session) {
   // LOW RISK
   // =====================================
 
+  if (symptoms.length === 1 && mildOnlySymptoms.includes(symptoms[0])) {
+    riskScore = 15;
+  }
+
   return {
     level: "low",
+    riskScore,
     emergency: false,
     message:
       "No emergency warning signs detected."
@@ -644,7 +729,6 @@ function generateRecommendations(session, topScores = []) {
   const hasRedFlags = () =>
     hasAny([
       "chest pain",
-      "difficulty breathing",
       "breathing difficulty",
       "shortness of breath",
       "fainting",
@@ -741,15 +825,15 @@ function detectEmergency(session) {
 
   const has = (s) => symptoms.includes(s);
   const hasSignal = (signal) => emergencySignals.includes(signal);
+  const hasBreathing = has("shortness of breath") || has("breathing difficulty");
 
   // HEART EMERGENCY
 
   if (
     has("chest pain") &&
-    (has("breathing difficulty") ||
-      has("sweating") ||
-      has("fainting") ||
-      has("palpitations") ||
+    (hasBreathing ||
+      has("dizziness") ||
+      has("arm pain") ||
       hasSignal("radiating chest pain"))
   ) {
     return {
@@ -801,7 +885,7 @@ function detectEmergency(session) {
     };
   }
 
-  if (has("breathing difficulty") && has("swelling")) {
+  if (hasBreathing && has("swelling")) {
     return {
       emergency: true,
       message:
@@ -809,7 +893,7 @@ function detectEmergency(session) {
     };
   }
 
-  if (has("breathing difficulty") && (session.severity || 0) >= 8) {
+  if (hasBreathing && (session.severity || 0) >= 8) {
     return {
       emergency: true,
       message:
@@ -860,7 +944,7 @@ function buildDifferentialPredictions(primaryLabel) {
     ];
   }
 
-  if (primaryLabel === "Metabolic / blood sugar pattern") {
+  if (primaryLabel === "Metabolic / Blood Sugar") {
     return [
       { label: "Possible dehydration overlap", score: 18 },
       { label: "Possible fatigue/weakness pattern", score: 14 }
@@ -940,6 +1024,7 @@ function buildFollowUps(session) {
   if (
     symptoms.includes("cough") &&
     !symptoms.includes("breathing difficulty") &&
+    !symptoms.includes("shortness of breath") &&
     !session.completedQuestions.respiratory
   ) {
     questions.push(
@@ -1090,11 +1175,35 @@ function buildResponse(session, topScores, followUps) {
     emergency: emergencyResult.emergency || riskData.emergency,
     emergencyMessage: emergencyResult.message || (riskData.emergency ? riskData.message : ""),
     riskLevel: riskData.level,
+    riskScore: riskData.riskScore,
     riskMessage: emergencyResult.message || riskData.message,
     recommendations,
+    matchedPatterns: validScores.map((item) => ({
+      label: item.label,
+      score: item.score
+    })),
     timelineAnalysis: analyzeTimeline(session)
   };
 }
+
+function analyzeSymptomMessage(message) {
+  const session = createSession();
+  updateSessionWithMessage(session, message);
+  const topScores = scoreConditions(session);
+  const result = buildResponse(session, topScores, buildFollowUps(session));
+
+  return {
+    detected_symptoms: [...session.symptoms],
+    matched_patterns: result.matchedPatterns,
+    top_three_thinking: result.top3,
+    symptom_group: result.symptomGroup,
+    cardiac_pattern: result.matchedPatterns.some((item) => item.label === "Cardiac pattern"),
+    risk_level: result.riskLevel,
+    risk_score: result.riskScore,
+    emergency_alert: result.emergency
+  };
+}
+
 function generateFutureForecast(session, result) {
   const symptoms = session.symptoms || [];
   const emergencySignals = session.emergencySignals || [];
@@ -1118,6 +1227,7 @@ function generateFutureForecast(session, result) {
 
   const has = (symptom) => symptoms.includes(symptom);
   const hasSignal = (signal) => emergencySignals.includes(signal);
+  const hasBreathing = has("shortness of breath") || has("breathing difficulty");
 
   if (!symptoms.length) {
     return forecast;
@@ -1127,7 +1237,7 @@ function generateFutureForecast(session, result) {
   // HIGH RISK / EMERGENCY
   // =====================================
   if (
-    (has("chest pain") && (has("breathing difficulty") || has("sweating") || has("palpitations"))) ||
+    (has("chest pain") && (hasBreathing || has("dizziness") || has("arm pain"))) ||
     has("fainting") ||
     has("confusion") ||
     hasSignal("radiating chest pain") ||
@@ -1145,7 +1255,7 @@ function generateFutureForecast(session, result) {
   // =====================================
   // RESPIRATORY FORECAST
   // =====================================
-  if (has("cough") || has("breathing difficulty") || has("sore throat")) {
+  if (has("cough") || hasBreathing || has("sore throat")) {
     forecast.level = riskLevel === "medium" ? "medium" : forecast.level;
     forecast.title = "Respiratory symptoms should be monitored closely.";
 
@@ -1212,8 +1322,8 @@ function generateFutureForecast(session, result) {
   // =====================================
   // CARDIAC FORECAST
   // =====================================
-  if (has("chest pain") || has("sweating")) {
-    forecast.level = "high";
+  if (has("chest pain")) {
+    forecast.level = forecast.level === "high" ? "high" : "medium";
     forecast.title = "Cardiac-related symptoms need close monitoring.";
 
     addUnique(
@@ -1305,6 +1415,14 @@ exports.askChatbot = async (req, res) => {
     const followUps = filterNewFollowUps(session, buildFollowUps(session));
 
     const result = buildResponse(session, topScores, followUps);
+    console.log("[SYMPTOM_DEBUG]", JSON.stringify({
+      raw_user_message: message,
+      extracted_symptoms: session.symptoms,
+      matched_patterns: result.matchedPatterns,
+      final_risk_score: result.riskScore,
+      final_risk_level: result.riskLevel
+    }));
+
     const responseFollowUps = result.followUps || [];
     if (result.emergency) {
       session.activeQuestion = null;
@@ -1366,6 +1484,7 @@ exports.askChatbot = async (req, res) => {
       emergency_alert: result.emergency,
       emergency_message: result.emergencyMessage,
       risk_level: result.riskLevel,
+      risk_score: result.riskScore,
       risk_message: result.riskMessage,
       report_context: session.reportContext,
       confidence: result.confidence,
@@ -1387,4 +1506,12 @@ exports.askChatbot = async (req, res) => {
       error: error.message,
     });
   }
+};
+
+exports._test = {
+  normalize,
+  extractSymptoms,
+  scoreConditions,
+  calculateRiskLevel,
+  analyzeSymptomMessage
 };
