@@ -22,8 +22,13 @@ const {
 
 const uploadsDir = path.join(__dirname, "../uploads");
 
-if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
+try {
+    if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+        console.log(`[REPORT] Created uploads directory at ${uploadsDir}`);
+    }
+} catch (err) {
+    console.error("REPORT ERROR: Could not ensure uploads directory:", err);
 }
 
 const storage = multer.diskStorage({
@@ -299,131 +304,132 @@ function buildEnhancedAnalysis(analysisResult, uploadedAt) {
 // =====================================================
 
 const analyzeUploadedReport = (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({
-            success: false,
-            message: "No file uploaded"
-        });
-    }
+    try {
+        console.log(`[REPORT] /upload called by user=${req.user?.id || "unknown"} file=${req.file?.originalname || "none"}`);
 
-    const userId = req.user?.id;
-
-    if (!userId) {
-        fs.unlink(req.file.path, () => {});
-        return res.status(401).json({
-            success: false,
-            message: "Authentication token is required"
-        });
-    }
-
-    const filePath = req.file.path;
-    const pythonCommand = process.platform === "win32" ? "python" : "python3";
-    const python = spawn(pythonCommand, [
-        path.join(__dirname, "../analyze_report.py"),
-        filePath
-    ]);
-
-    let output = "";
-    let errorOutput = "";
-
-    python.stdout.on("data", (data) => {
-        output += data.toString();
-    });
-
-    python.stderr.on("data", (data) => {
-        errorOutput += data.toString();
-    });
-
-    python.on("error", (error) => {
-        fs.unlink(filePath, () => {});
-
-        return res.status(500).json({
-            success: false,
-            message: "Could not start Python analyzer",
-            error: error.message
-        });
-    });
-
-    python.on("close", (code) => {
-        fs.unlink(filePath, () => {});
-
-        if (code !== 0) {
-            return res.status(500).json({
-                success: false,
-                message: "Analysis failed",
-                error: errorOutput
-            });
+        if (!req.file) {
+            console.error("REPORT ERROR: No file uploaded (upload route)");
+            return res.status(400).json({ success: false, message: "No file uploaded" });
         }
 
-        let analysisResult;
+        const userId = req.user?.id;
 
-        try {
-            analysisResult = JSON.parse(output.trim());
-        } catch (parseError) {
-            return res.status(500).json({
-                success: false,
-                message: "Failed to parse analysis result"
-            });
+        if (!userId) {
+            fs.unlink(req.file.path, () => {});
+            console.error("REPORT ERROR: Authentication token is required for upload");
+            return res.status(401).json({ success: false, message: "Authentication token is required" });
         }
 
-        const reportType = Array.isArray(analysisResult.report_type)
-            ? analysisResult.report_type.join(", ")
-            : analysisResult.report_type;
-        const reportName = req.file.filename;
-        const findings = Array.isArray(analysisResult.findings)
-            ? analysisResult.findings.join(", ")
-            : analysisResult.findings || "";
-        const recommendations = Array.isArray(analysisResult.recommendations)
-            ? analysisResult.recommendations.join(", ")
-            : analysisResult.recommendations || "";
-        const riskLevel = analysisResult.risk_level || "LOW";
-        const uploadedAt = new Date().toISOString();
-        const enhancedAnalysis = buildEnhancedAnalysis(analysisResult, uploadedAt);
+        const filePath = req.file.path;
+        const pythonCommand = process.platform === "win32" ? "python" : "python3";
+        const python = spawn(pythonCommand, [path.join(__dirname, "../analyze_report.py"), filePath]);
 
-        const sql = `
-            INSERT INTO report_history
-            (user_id, report_name, report_type, risk_level, findings, recommendations, uploaded_at)
-            VALUES (?, ?, ?, ?, ?, ?, NOW())
-        `;
+        let output = "";
+        let errorOutput = "";
 
-        pool.query(sql, [userId, reportName, reportType, riskLevel, findings, enhancedAnalysis.recommendations.join("; ")], (dbErr, dbResult) => {
-            if (dbErr) {
-                return res.status(500).json({
-                    success: false,
-                    message: "Report analyzed but could not be saved"
-                });
+        python.stdout.on("data", (data) => {
+            output += data.toString();
+        });
+
+        python.stderr.on("data", (data) => {
+            errorOutput += data.toString();
+        });
+
+        python.on("error", (error) => {
+            console.error("REPORT ERROR: Python analyzer spawn failed:", error);
+            fs.unlink(filePath, () => {});
+            return res.status(500).json({ success: false, message: "Could not start Python analyzer", error: error.message });
+        });
+
+        python.on("close", (code) => {
+            fs.unlink(filePath, () => {});
+
+            if (code !== 0) {
+                console.error("REPORT ERROR: Python analyzer exited with code", code, "stderr:", errorOutput);
+                return res.status(500).json({ success: false, message: "Analysis failed", error: errorOutput });
             }
 
-            return res.status(200).json({
-                status: "success",
-                report_id: dbResult.insertId,
-                uploaded_at: uploadedAt,
-                analysis: enhancedAnalysis
+            let analysisResult;
+
+            try {
+                analysisResult = JSON.parse(output.trim());
+            } catch (parseError) {
+                console.error("REPORT ERROR: Failed to parse analysis result:", parseError, "rawOutput:", output);
+                return res.status(500).json({ success: false, message: "Failed to parse analysis result", error: parseError.message });
+            }
+
+            const reportType = Array.isArray(analysisResult.report_type)
+                ? analysisResult.report_type.join(", ")
+                : analysisResult.report_type;
+            const reportName = req.file.filename;
+            const findings = Array.isArray(analysisResult.findings)
+                ? analysisResult.findings.join(", ")
+                : analysisResult.findings || "";
+            const recommendations = Array.isArray(analysisResult.recommendations)
+                ? analysisResult.recommendations.join(", ")
+                : analysisResult.recommendations || "";
+            const riskLevel = analysisResult.risk_level || "LOW";
+            const uploadedAt = new Date().toISOString();
+            const enhancedAnalysis = buildEnhancedAnalysis(analysisResult, uploadedAt);
+
+            const sql = `
+                INSERT INTO report_history
+                (user_id, report_name, report_type, risk_level, findings, recommendations, uploaded_at)
+                VALUES (?, ?, ?, ?, ?, ?, NOW())
+            `;
+
+            pool.query(sql, [userId, reportName, reportType, riskLevel, findings, enhancedAnalysis.recommendations.join("; ")], (dbErr, dbResult) => {
+                if (dbErr) {
+                    console.error("REPORT ERROR: DB insert failed:", dbErr);
+                    return res.status(500).json({ success: false, message: "Report analyzed but could not be saved", error: dbErr.message });
+                }
+
+                return res.status(200).json({ status: "success", report_id: dbResult.insertId, uploaded_at: uploadedAt, analysis: enhancedAnalysis });
             });
         });
-    });
+    } catch (error) {
+        console.error("REPORT ERROR:", error);
+        return res.status(500).json({ success: false, message: "Internal server error", error: String(error && error.message ? error.message : error) });
+    }
 };
 
 // =====================================================
 // REPORT ROUTES
 // =====================================================
 
-router.post("/upload", authMiddleware, upload.single("report"), analyzeUploadedReport);
-router.post("/analyze", authMiddleware, upload.single("report"), analyzeUploadedReport);
+function multerHandler(fieldName) {
+    return (req, res, next) => {
+        upload.single(fieldName)(req, res, (err) => {
+            if (err) {
+                console.error("REPORT ERROR: Multer upload error:", err);
+                return res.status(400).json({ success: false, message: err.message });
+            }
+            next();
+        });
+    };
+}
+
+router.post("/upload", authMiddleware, multerHandler("report"), analyzeUploadedReport);
+router.post("/analyze", authMiddleware, multerHandler("report"), analyzeUploadedReport);
 
 router.post("/export-pdf", (req, res) => {
-    const body = req.body || {};
-    const summary = {
-        reportType: Array.isArray(body.report_type) ? body.report_type.join(", ") : body.report_type || body.reportType || "-",
-        riskLevel: body.risk_level || body.riskLevel || "-",
-        findings: parseList(body.findings),
-        recommendations: parseList(body.recommendations),
-        summary: body.summary || body.message || "-",
-        fileName: body.uploaded_file || body.fileName || "uploaded-report",
-        disclaimer: body.disclaimer || "This MedIntel AI summary is for education only and is not a replacement for a qualified doctor."
-    };
+    try {
+        const body = req.body || {};
+        const summary = {
+            reportType: Array.isArray(body.report_type) ? body.report_type.join(", ") : body.report_type || body.reportType || "-",
+            riskLevel: body.risk_level || body.riskLevel || "-",
+            findings: parseList(body.findings),
+            recommendations: parseList(body.recommendations),
+            summary: body.summary || body.message || "-",
+            fileName: body.uploaded_file || body.fileName || "uploaded-report",
+            disclaimer: body.disclaimer || "This MedIntel AI summary is for education only and is not a replacement for a qualified doctor."
+        };
 
-    sendPdf(res, summary);
+        sendPdf(res, summary);
+    } catch (error) {
+        console.error("REPORT ERROR: /export-pdf failed:", error);
+        return res.status(500).json({ success: false, message: "Could not create PDF", error: error && error.message ? error.message : String(error) });
+    }
 });
 
 router.get("/all", authMiddleware, getAllReports);
@@ -432,25 +438,31 @@ router.get("/", authMiddleware, getAllReports);
 router.get("/search", authMiddleware, searchReports);
 
 router.get("/:id/pdf", authMiddleware, (req, res) => {
-    const sql = `
-        SELECT * FROM report_history
-        WHERE id = ?
-          AND user_id = ?
-    `;
+    try {
+        const sql = `
+            SELECT * FROM report_history
+            WHERE id = ?
+              AND user_id = ?
+        `;
 
-    pool.query(sql, [req.params.id, req.user.id], (err, results) => {
-        if (err) {
-            return res.status(500).json({ message: "Database Error" });
-        }
+        pool.query(sql, [req.params.id, req.user.id], (err, results) => {
+            if (err) {
+                console.error("REPORT ERROR: /:id/pdf DB error:", err);
+                return res.status(500).json({ message: "Database Error", error: err && err.message ? err.message : String(err) });
+            }
 
-        if (!results.length) {
-            return res.status(404).json({ message: "Report Not Found" });
-        }
+            if (!results || !results.length) {
+                return res.status(404).json({ message: "Report Not Found" });
+            }
 
-        const summary = buildStoredReportSummary(results[0]);
-        const fileName = `report-${req.params.id}-summary.pdf`;
-        return sendPdf(res, summary, fileName);
-    });
+            const summary = buildStoredReportSummary(results[0]);
+            const fileName = `report-${req.params.id}-summary.pdf`;
+            return sendPdf(res, summary, fileName);
+        });
+    } catch (error) {
+        console.error("REPORT ERROR:", error);
+        return res.status(500).json({ message: "Internal server error", error: error && error.message ? error.message : String(error) });
+    }
 });
 
 router.get("/:id", authMiddleware, getSingleReport);

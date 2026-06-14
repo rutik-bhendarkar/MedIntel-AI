@@ -50,6 +50,26 @@ pool.on("error", (err) => {
     }
 })();
 
+// Verify that key application tables exist and log helpful diagnostics
+(async function verifySchema() {
+    try {
+        const client = await pool.connect();
+        try {
+            const result = await client.query("SELECT to_regclass('public.report_history') as table_name");
+            const exists = result && result.rows && result.rows[0] && result.rows[0].table_name;
+            if (exists) {
+                console.log("DB CHECK: report_history table exists");
+            } else {
+                console.warn("DB CHECK: report_history table does NOT exist; run database/data.sql to create schema");
+            }
+        } finally {
+            client.release();
+        }
+    } catch (err) {
+        console.error("DB CHECK FAILED:", err && err.message ? err.message : err);
+    }
+})();
+
 function convertPlaceholders(sql) {
     if (!sql || sql.indexOf("?") === -1) return sql;
     const parts = sql.split("?");

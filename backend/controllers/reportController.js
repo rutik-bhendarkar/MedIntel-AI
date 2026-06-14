@@ -485,41 +485,38 @@ async function enrichReport(report) {
 // =====================================
 
 exports.getAllReports = (req, res) => {
-    const userId = getAuthenticatedUserId(req, res);
+    try {
+        const userId = getAuthenticatedUserId(req, res);
 
-    if (!userId) {
-        return;
+        if (!userId) {
+            return;
+        }
+
+        const sql = `
+            SELECT * FROM report_history
+            WHERE user_id = ?
+            ORDER BY uploaded_at DESC, id DESC
+        `;
+
+        pool.query(sql, [userId], async (err, results) => {
+            if (err) {
+                console.error("REPORT ERROR: getAllReports DB error:", err);
+                return res.status(500).json({ message: "Database Error", error: err && err.message ? err.message : String(err) });
+            }
+
+            try {
+                const reports = await Promise.all(results.map(enrichReport));
+
+                return res.status(200).json({ status: "success", total_reports: results.length, reports });
+            } catch (error) {
+                console.error("REPORT ERROR: getAllReports enrichment error:", error);
+                return res.status(500).json({ message: "Unable to enrich reports", error: error && error.message ? error.message : String(error) });
+            }
+        });
+    } catch (error) {
+        console.error("REPORT ERROR:", error);
+        return res.status(500).json({ message: "Internal server error", error: error && error.message ? error.message : String(error) });
     }
-
-    const sql = `
-        SELECT * FROM report_history
-        WHERE user_id = ?
-        ORDER BY uploaded_at DESC, id DESC
-    `;
-
-    pool.query(sql, [userId], async (err, results) => {
-        if (err) {
-            console.log(err);
-            return res.status(500).json({
-                message: "Database Error",
-            });
-        }
-
-        try {
-            const reports = await Promise.all(results.map(enrichReport));
-
-            return res.status(200).json({
-                status: "success",
-                total_reports: results.length,
-                reports,
-            });
-        } catch (error) {
-            console.log(error);
-            return res.status(500).json({
-                message: "Unable to enrich reports",
-            });
-        }
-    });
 };
 
 // =====================================
@@ -527,48 +524,41 @@ exports.getAllReports = (req, res) => {
 // =====================================
 
 exports.getSingleReport = (req, res) => {
-    const userId = getAuthenticatedUserId(req, res);
+    try {
+        const userId = getAuthenticatedUserId(req, res);
 
-    if (!userId) {
-        return;
+        if (!userId) return;
+
+        const reportId = req.params.id;
+
+        const sql = `
+            SELECT * FROM report_history
+            WHERE id = ?
+              AND user_id = ?
+        `;
+
+        pool.query(sql, [reportId, userId], async (err, results) => {
+            if (err) {
+                console.error("REPORT ERROR: getSingleReport DB error:", err);
+                return res.status(500).json({ message: "Database Error", error: err && err.message ? err.message : String(err) });
+            }
+
+            if (!results || results.length === 0) {
+                return res.status(404).json({ message: "Report Not Found" });
+            }
+
+            try {
+                const report = await enrichReport(results[0]);
+                return res.status(200).json({ status: "success", report });
+            } catch (error) {
+                console.error("REPORT ERROR: enrichReport failed:", error);
+                return res.status(500).json({ message: "Unable to enrich report", error: error && error.message ? error.message : String(error) });
+            }
+        });
+    } catch (error) {
+        console.error("REPORT ERROR:", error);
+        return res.status(500).json({ message: "Internal server error", error: error && error.message ? error.message : String(error) });
     }
-
-    const reportId = req.params.id;
-
-    const sql = `
-        SELECT * FROM report_history
-        WHERE id = ?
-          AND user_id = ?
-    `;
-
-    pool.query(sql, [reportId, userId], async (err, results) => {
-        if (err) {
-            console.log(err);
-            return res.status(500).json({
-                message: "Database Error",
-            });
-        }
-
-        if (results.length === 0) {
-            return res.status(404).json({
-                message: "Report Not Found",
-            });
-        }
-
-        try {
-            const report = await enrichReport(results[0]);
-
-            return res.status(200).json({
-                status: "success",
-                report,
-            });
-        } catch (error) {
-            console.log(error);
-            return res.status(500).json({
-                message: "Unable to enrich report",
-            });
-        }
-    });
 };
 
 // =====================================
@@ -576,39 +566,35 @@ exports.getSingleReport = (req, res) => {
 // =====================================
 
 exports.deleteReport = (req, res) => {
-    const userId = getAuthenticatedUserId(req, res);
+    try {
+        const userId = getAuthenticatedUserId(req, res);
 
-    if (!userId) {
-        return;
-    }
+        if (!userId) return;
 
-    const reportId = req.params.id;
+        const reportId = req.params.id;
 
-    const sql = `
-        DELETE FROM report_history
-        WHERE id = ?
-          AND user_id = ?
-    `;
+        const sql = `
+            DELETE FROM report_history
+            WHERE id = ?
+              AND user_id = ?
+        `;
 
-    pool.query(sql, [reportId, userId], (err, result) => {
-        if (err) {
-            console.log(err);
-            return res.status(500).json({
-                message: "Database Error",
-            });
-        }
+        pool.query(sql, [reportId, userId], (err, result) => {
+            if (err) {
+                console.error("REPORT ERROR: deleteReport DB error:", err);
+                return res.status(500).json({ message: "Database Error", error: err && err.message ? err.message : String(err) });
+            }
 
-        if (result.affectedRows === 0) {
-            return res.status(404).json({
-                message: "Report Not Found",
-            });
-        }
+            if (!result || result.affectedRows === 0) {
+                return res.status(404).json({ message: "Report Not Found" });
+            }
 
-        res.status(200).json({
-            status: "success",
-            message: "Report Deleted Successfully",
+            res.status(200).json({ status: "success", message: "Report Deleted Successfully" });
         });
-    });
+    } catch (error) {
+        console.error("REPORT ERROR:", error);
+        return res.status(500).json({ message: "Internal server error", error: error && error.message ? error.message : String(error) });
+    }
 };
 
 // =====================================
@@ -616,48 +602,38 @@ exports.deleteReport = (req, res) => {
 // =====================================
 
 exports.searchReports = (req, res) => {
-    const userId = getAuthenticatedUserId(req, res);
+    try {
+        const userId = getAuthenticatedUserId(req, res);
 
-    if (!userId) {
-        return;
-    }
+        if (!userId) return;
 
-    const reportType = req.query.type;
+        const reportType = req.query.type;
 
-    if (!reportType) {
-        return res.status(400).json({
-            message: "type query parameter is required",
+        if (!reportType) return res.status(400).json({ message: "type query parameter is required" });
+
+        const sql = `
+            SELECT * FROM report_history
+            WHERE user_id = ?
+              AND report_type LIKE ?
+            ORDER BY uploaded_at DESC, id DESC
+        `;
+
+        pool.query(sql, [userId, `%${reportType}%`], async (err, results) => {
+            if (err) {
+                console.error("REPORT ERROR: searchReports DB error:", err);
+                return res.status(500).json({ message: "Database Error", error: err && err.message ? err.message : String(err) });
+            }
+
+            try {
+                const reports = await Promise.all(results.map(enrichReport));
+                return res.status(200).json({ status: "success", total_results: results.length, reports });
+            } catch (error) {
+                console.error("REPORT ERROR: searchReports enrichment error:", error);
+                return res.status(500).json({ message: "Unable to enrich reports", error: error && error.message ? error.message : String(error) });
+            }
         });
+    } catch (error) {
+        console.error("REPORT ERROR:", error);
+        return res.status(500).json({ message: "Internal server error", error: error && error.message ? error.message : String(error) });
     }
-
-    const sql = `
-        SELECT * FROM report_history
-        WHERE user_id = ?
-          AND report_type LIKE ?
-        ORDER BY uploaded_at DESC, id DESC
-    `;
-
-    pool.query(sql, [userId, `%${reportType}%`], async (err, results) => {
-        if (err) {
-            console.log(err);
-            return res.status(500).json({
-                message: "Database Error",
-            });
-        }
-
-        try {
-            const reports = await Promise.all(results.map(enrichReport));
-
-            return res.status(200).json({
-                status: "success",
-                total_results: results.length,
-                reports,
-            });
-        } catch (error) {
-            console.log(error);
-            return res.status(500).json({
-                message: "Unable to enrich reports",
-            });
-        }
-    });
 };
