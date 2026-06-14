@@ -60,7 +60,29 @@ pool.on("error", (err) => {
             if (exists) {
                 console.log("DB CHECK: report_history table exists");
             } else {
-                console.warn("DB CHECK: report_history table does NOT exist; run database/data.sql to create schema");
+                console.warn("DB CHECK: report_history table does NOT exist; attempting to create minimal table to recover...");
+
+                try {
+                    await client.query(`
+                        CREATE TABLE IF NOT EXISTS report_history (
+                            id SERIAL PRIMARY KEY,
+                            user_id INTEGER NOT NULL,
+                            report_name VARCHAR(255),
+                            report_type VARCHAR(100),
+                            risk_level VARCHAR(50),
+                            findings TEXT,
+                            recommendations TEXT,
+                            uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    `);
+
+                    await client.query(`CREATE INDEX IF NOT EXISTS idx_user_reports ON report_history(user_id)`);
+
+                    console.log("DB CHECK: Created minimal report_history table and index");
+                } catch (creationErr) {
+                    console.error("DB CHECK: Failed to create report_history table:", creationErr && creationErr.message ? creationErr.message : creationErr);
+                    console.warn("DB CHECK: Please run database/data.sql or create the table manually in your database.");
+                }
             }
         } finally {
             client.release();
