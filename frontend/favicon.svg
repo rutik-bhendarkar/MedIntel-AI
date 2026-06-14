@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">MedIntel AI - Health</title>
+  <defs>
+    <style> .heart { fill: #e63946 } .cross { fill: #ffffff } </style>
+  </defs>
+  <path class="heart" d="M32 52s-20-12.5-20-26c0-7.7 6.5-14 14-14 5 0 8 3 8 3s3-3 8-3c7.5 0 14 6.3 14 14 0 13.5-20 26-20 26z" />
+  <g class="cross" transform="translate(0,0)">
+    <rect x="28" y="18" width="8" height="18" rx="1" />
+    <rect x="22" y="24" width="20" height="8" rx="1" />
+  </g>
+</svg>
