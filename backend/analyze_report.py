@@ -2,6 +2,8 @@ import json
 import os
 import re
 import sys
+import traceback
+from pathlib import Path
 
 # OCR notes:
 # - PDF text extraction uses PyPDF2.
@@ -32,7 +34,18 @@ except ImportError:
 
 
 def json_exit(payload, code=0):
-    print(json.dumps(payload))
+    out = json.dumps(payload)
+    # print machine-readable output to stdout (used by caller)
+    print(out)
+
+    # Also emit the error payload to stderr when exiting with non-zero code
+    # so that external process supervisors (like Node/Render) capture the message
+    if code and code != 0:
+        try:
+            print(out, file=sys.stderr)
+        except Exception:
+            pass
+
     sys.exit(code)
 
 
@@ -199,189 +212,192 @@ def calculate_confidence(text, report_types, findings, ocr_used):
     return round(max(0.2, min(score, 0.95)), 2)
 
 
-if len(sys.argv) < 2:
-    json_exit({
-        "status": "error",
-        "message": "No file path provided. Usage: python analyze_report.py <file_path>"
-    }, 1)
+PROJECT_DIR = Path(__file__).resolve().parent
 
-file_path = sys.argv[1]
+def main():
+    if len(sys.argv) < 2:
+        json_exit({
+            "status": "error",
+            "message": "No file path provided. Usage: python analyze_report.py <file_path>"
+        }, 1)
 
-if not os.path.exists(file_path):
-    json_exit({
-        "status": "error",
-        "message": f"File not found: {file_path}"
-    }, 1)
+    file_path = sys.argv[1]
 
-file_ext = os.path.splitext(file_path)[1].lower()
-ocr_used = False
+    if not os.path.exists(file_path):
+        json_exit({
+            "status": "error",
+            "message": f"File not found: {file_path}"
+        }, 1)
 
-if file_ext == ".pdf":
-    extracted_text = read_pdf_text(file_path)
+    file_ext = os.path.splitext(file_path)[1].lower()
+    ocr_used = False
 
-    if len(clean_text(extracted_text)) < 40:
-        ocr_text, did_ocr = ocr_pdf_pages(file_path)
-        if did_ocr and len(clean_text(ocr_text)) > len(clean_text(extracted_text)):
-            extracted_text = ocr_text
-            ocr_used = True
-elif file_ext == ".txt":
-    extracted_text = read_text_file(file_path)
-elif file_ext in [".jpg", ".jpeg", ".png"]:
-    extracted_text = ocr_image_path(file_path)
-    ocr_used = True
-else:
-    json_exit({
-        "status": "error",
-        "message": f"Unsupported file type: {file_ext}. Use PDF, TXT, JPG, JPEG, or PNG."
-    }, 1)
+    if file_ext == ".pdf":
+        extracted_text = read_pdf_text(file_path)
 
-if not extracted_text.strip():
-    json_exit({
-        "status": "error",
-        "message": "No text could be extracted from the file. The PDF may be scanned or image-based."
-    }, 1)
+        if len(clean_text(extracted_text)) < 40:
+            ocr_text, did_ocr = ocr_pdf_pages(file_path)
+            if did_ocr and len(clean_text(ocr_text)) > len(clean_text(extracted_text)):
+                extracted_text = ocr_text
+                ocr_used = True
+    elif file_ext == ".txt":
+        extracted_text = read_text_file(file_path)
+    elif file_ext in [".jpg", ".jpeg", ".png"]:
+        extracted_text = ocr_image_path(file_path)
+        ocr_used = True
+    else:
+        json_exit({
+            "status": "error",
+            "message": f"Unsupported file type: {file_ext}. Use PDF, TXT, JPG, JPEG, or PNG."
+        }, 1)
 
-text = clean_text(extracted_text)
+    if not extracted_text.strip():
+        json_exit({
+            "status": "error",
+            "message": "No text could be extracted from the file. The PDF may be scanned or image-based."
+        }, 1)
 
-response = {
-    "status": "success",
-    "uploaded_file": file_path,
-    "report_type": [],
-    "risk_level": "LOW",
-    "summary": "",
-    "simplified_explanation": "",
-    "findings": [],
-    "recommendations": [],
-    "precautions": [],
-    "emergency_alert": False,
-    "disclaimer": "This MedIntel AI summary is for education only and is not a replacement for a qualified doctor.",
-    "extracted_text": extracted_text.strip(),
-    "extracted_text_preview": extracted_text.strip()[:700],
-    "ocr_used": ocr_used,
-    "confidence": 0.0
-}
+    text = clean_text(extracted_text)
 
-detected_types = []
-risk_score = 0
+    response = {
+        "status": "success",
+        "uploaded_file": file_path,
+        "report_type": [],
+        "risk_level": "LOW",
+        "summary": "",
+        "simplified_explanation": "",
+        "findings": [],
+        "recommendations": [],
+        "precautions": [],
+        "emergency_alert": False,
+        "disclaimer": "This MedIntel AI summary is for education only and is not a replacement for a qualified doctor.",
+        "extracted_text": extracted_text.strip(),
+        "extracted_text_preview": extracted_text.strip()[:700],
+        "ocr_used": ocr_used,
+        "confidence": 0.0
+    }
 
-diabetes_keywords = [
-    "diabetes", "glucose", "blood sugar", "hba1c", "a1c", "insulin",
-    "fasting sugar", "fasting glucose", "fbs", "rbs", "sugar intake"
-]
-heart_keywords = [
-    "cholesterol", "ecg", "troponin", "angina", "heart rate",
-    "chest pain", "cardiac", "ldl", "hdl"
-]
-liver_keywords = [
-    "bilirubin", "albumin", "alkaline phosphatase", "sgpt", "sgot",
-    "liver function", "lft", "alt", "ast"
-]
-cbc_keywords = [
-    "hemoglobin", "wbc", "rbc", "platelet", "hematocrit", "mcv", "mch",
-    "white blood cell", "red blood cell"
-]
+    detected_types = []
+    risk_score = 0
 
-if has_any(text, diabetes_keywords):
-    detected_types.append("diabetes")
-if has_any(text, heart_keywords):
-    detected_types.append("heart")
-if has_any(text, liver_keywords):
-    detected_types.append("liver")
-if has_any(text, cbc_keywords):
-    detected_types.append("cbc")
-if not detected_types:
-    detected_types.append("general")
-
-response["report_type"] = detected_types
-
-if "diabetes" in detected_types:
-    glucose_markers = [
-        "fasting glucose", "fasting blood sugar", "blood glucose",
-        "blood sugar", "random glucose", "glucose", "fbs", "rbs"
+    diabetes_keywords = [
+        "diabetes", "glucose", "blood sugar", "hba1c", "a1c", "insulin",
+        "fasting sugar", "fasting glucose", "fbs", "rbs", "sugar intake"
     ]
-    glucose_value = find_marker_value(text, glucose_markers)
-    hba1c_value = find_marker_value(text, ["hba1c", "a1c"])
-    elevated_text = phrase_near_marker(
-        text,
-        glucose_markers,
-        ["high", "elevated", "increased", "abnormal", "hyperglycemia"]
-    ) or "glucose levels are elevated" in text
+    heart_keywords = [
+        "cholesterol", "ecg", "troponin", "angina", "heart rate",
+        "chest pain", "cardiac", "ldl", "hdl"
+    ]
+    liver_keywords = [
+        "bilirubin", "albumin", "alkaline phosphatase", "sgpt", "sgot",
+        "liver function", "lft", "alt", "ast"
+    ]
+    cbc_keywords = [
+        "hemoglobin", "wbc", "rbc", "platelet", "hematocrit", "mcv", "mch",
+        "white blood cell", "red blood cell"
+    ]
 
-    if elevated_text:
-        add_unique(response["findings"], "Elevated glucose level detected")
-        add_unique(response["recommendations"], "Avoid excess sugar and refined carbohydrates")
-        add_unique(response["recommendations"], "Monitor blood glucose regularly")
-        add_unique(response["recommendations"], "Exercise daily for at least 30 minutes")
-        add_unique(response["recommendations"], "Consult a doctor or diabetologist for review")
-        risk_score += 65
+    if has_any(text, diabetes_keywords):
+        detected_types.append("diabetes")
+    if has_any(text, heart_keywords):
+        detected_types.append("heart")
+    if has_any(text, liver_keywords):
+        detected_types.append("liver")
+    if has_any(text, cbc_keywords):
+        detected_types.append("cbc")
+    if not detected_types:
+        detected_types.append("general")
 
-    if glucose_value is not None:
-        if glucose_value >= 200:
-            add_unique(response["findings"], f"Very high glucose value detected: {glucose_value:g}")
-            add_unique(response["recommendations"], "Seek medical advice promptly for high glucose control")
-            risk_score += 75
-        elif glucose_value >= 126:
-            add_unique(response["findings"], f"High glucose value detected: {glucose_value:g}")
-            add_unique(response["recommendations"], "Reduce sugar intake and repeat glucose testing as advised")
-            risk_score += 55
-        elif glucose_value >= 100:
-            add_unique(response["findings"], f"Borderline glucose value detected: {glucose_value:g}")
-            add_unique(response["recommendations"], "Maintain diet control and monitor glucose trends")
-            risk_score += 25
-        else:
-            add_unique(response["findings"], f"Glucose value detected: {glucose_value:g}")
+    response["report_type"] = detected_types
 
-    if hba1c_value is not None:
-        if hba1c_value >= 6.5:
-            add_unique(response["findings"], f"High HbA1c value detected: {hba1c_value:g}%")
-            add_unique(response["recommendations"], "Discuss HbA1c control and treatment plan with your doctor")
-            risk_score += 60
-        elif hba1c_value >= 5.7:
-            add_unique(response["findings"], f"Borderline HbA1c value detected: {hba1c_value:g}%")
-            add_unique(response["recommendations"], "Improve diet, exercise, and repeat HbA1c testing as advised")
-            risk_score += 30
-        else:
-            add_unique(response["findings"], f"HbA1c value detected: {hba1c_value:g}%")
+    if "diabetes" in detected_types:
+        glucose_markers = [
+            "fasting glucose", "fasting blood sugar", "blood glucose",
+            "blood sugar", "random glucose", "glucose", "fbs", "rbs"
+        ]
+        glucose_value = find_marker_value(text, glucose_markers)
+        hba1c_value = find_marker_value(text, ["hba1c", "a1c"])
+        elevated_text = phrase_near_marker(
+            text,
+            glucose_markers,
+            ["high", "elevated", "increased", "abnormal", "hyperglycemia"]
+        ) or "glucose levels are elevated" in text
 
-    if contains_keyword(text, "insulin"):
-        add_unique(response["findings"], "Insulin-related information detected")
-        add_unique(response["recommendations"], "Monitor insulin levels as advised by your physician")
-        risk_score += 10
+        if elevated_text:
+            add_unique(response["findings"], "Elevated glucose level detected")
+            add_unique(response["recommendations"], "Avoid excess sugar and refined carbohydrates")
+            add_unique(response["recommendations"], "Monitor blood glucose regularly")
+            add_unique(response["recommendations"], "Exercise daily for at least 30 minutes")
+            add_unique(response["recommendations"], "Consult a doctor or diabetologist for review")
+            risk_score += 65
 
-    if not response["findings"]:
-        add_unique(response["findings"], "Diabetes-related report detected")
-        add_unique(response["recommendations"], "Continue regular blood sugar monitoring")
-        add_unique(response["recommendations"], "Maintain a balanced low-sugar diet")
-        add_unique(response["recommendations"], "Exercise regularly and follow up with your doctor")
+        if glucose_value is not None:
+            if glucose_value >= 200:
+                add_unique(response["findings"], f"Very high glucose value detected: {glucose_value:g}")
+                add_unique(response["recommendations"], "Seek medical advice promptly for high glucose control")
+                risk_score += 75
+            elif glucose_value >= 126:
+                add_unique(response["findings"], f"High glucose value detected: {glucose_value:g}")
+                add_unique(response["recommendations"], "Reduce sugar intake and repeat glucose testing as advised")
+                risk_score += 55
+            elif glucose_value >= 100:
+                add_unique(response["findings"], f"Borderline glucose value detected: {glucose_value:g}")
+                add_unique(response["recommendations"], "Maintain diet control and monitor glucose trends")
+                risk_score += 25
+            else:
+                add_unique(response["findings"], f"Glucose value detected: {glucose_value:g}")
 
-if "heart" in detected_types:
-    cholesterol_value = find_marker_value(text, ["total cholesterol", "cholesterol"])
-    ldl_value = find_marker_value(text, ["ldl"])
+        if hba1c_value is not None:
+            if hba1c_value >= 6.5:
+                add_unique(response["findings"], f"High HbA1c value detected: {hba1c_value:g}%")
+                add_unique(response["recommendations"], "Discuss HbA1c control and treatment plan with your doctor")
+                risk_score += 60
+            elif hba1c_value >= 5.7:
+                add_unique(response["findings"], f"Borderline HbA1c value detected: {hba1c_value:g}%")
+                add_unique(response["recommendations"], "Improve diet, exercise, and repeat HbA1c testing as advised")
+                risk_score += 30
+            else:
+                add_unique(response["findings"], f"HbA1c value detected: {hba1c_value:g}%")
 
-    if contains_keyword(text, "cholesterol"):
-        add_unique(response["findings"], "Cholesterol marker detected")
-        add_unique(response["recommendations"], "Reduce saturated fats and processed foods")
-        risk_score += 20
+        if contains_keyword(text, "insulin"):
+            add_unique(response["findings"], "Insulin-related information detected")
+            add_unique(response["recommendations"], "Monitor insulin levels as advised by your physician")
+            risk_score += 10
 
-    if cholesterol_value is not None and cholesterol_value >= 240:
-        add_unique(response["findings"], f"High total cholesterol value detected: {cholesterol_value:g}")
-        add_unique(response["recommendations"], "Review cholesterol control with a doctor")
-        risk_score += 35
+        if not response["findings"]:
+            add_unique(response["findings"], "Diabetes-related report detected")
+            add_unique(response["recommendations"], "Continue regular blood sugar monitoring")
+            add_unique(response["recommendations"], "Maintain a balanced low-sugar diet")
+            add_unique(response["recommendations"], "Exercise regularly and follow up with your doctor")
 
-    if ldl_value is not None and ldl_value >= 160:
-        add_unique(response["findings"], f"High LDL value detected: {ldl_value:g}")
-        add_unique(response["recommendations"], "Ask your doctor about LDL reduction strategies")
-        risk_score += 35
+    if "heart" in detected_types:
+        cholesterol_value = find_marker_value(text, ["total cholesterol", "cholesterol"])
+        ldl_value = find_marker_value(text, ["ldl"])
 
-    if "chest pain" in text or contains_keyword(text, "angina"):
-        add_unique(response["findings"], "Chest pain or angina symptom mentioned")
-        add_unique(response["recommendations"], "Seek immediate cardiac evaluation")
-        response["emergency_alert"] = True
-        risk_score += 50
+        if contains_keyword(text, "cholesterol"):
+            add_unique(response["findings"], "Cholesterol marker detected")
+            add_unique(response["recommendations"], "Reduce saturated fats and processed foods")
+            risk_score += 20
 
-    if contains_keyword(text, "ecg") or contains_keyword(text, "troponin"):
-        add_unique(response["findings"], "Cardiac marker detected")
-        add_unique(response["recommendations"], "Consult a cardiologist for further evaluation")
+        if cholesterol_value is not None and cholesterol_value >= 240:
+            add_unique(response["findings"], f"High total cholesterol value detected: {cholesterol_value:g}")
+            add_unique(response["recommendations"], "Review cholesterol control with a doctor")
+            risk_score += 35
+
+        if ldl_value is not None and ldl_value >= 160:
+            add_unique(response["findings"], f"High LDL value detected: {ldl_value:g}")
+            add_unique(response["recommendations"], "Ask your doctor about LDL reduction strategies")
+            risk_score += 35
+
+        if "chest pain" in text or contains_keyword(text, "angina"):
+            add_unique(response["findings"], "Chest pain or angina symptom mentioned")
+            add_unique(response["recommendations"], "Seek immediate cardiac evaluation")
+            response["emergency_alert"] = True
+            risk_score += 50
+
+        if contains_keyword(text, "ecg") or contains_keyword(text, "troponin"):
+            add_unique(response["findings"], "Cardiac marker detected")
+            add_unique(response["recommendations"], "Consult a cardiologist for further evaluation")
         risk_score += 25
 
     add_unique(response["recommendations"], "Walk daily for at least 30 minutes if approved by your doctor")
@@ -453,5 +469,22 @@ response["confidence"] = calculate_confidence(
     response["findings"],
     response["ocr_used"]
 )
+    return response
 
-json_exit(response)
+
+if __name__ == '__main__':
+    try:
+        resp = main()
+        json_exit(resp)
+    except Exception as e:
+        # Print full traceback to stderr so Render / Node logs capture it
+        traceback.print_exc(file=sys.stderr)
+        try:
+            json_exit({
+                "status": "error",
+                "message": "Unhandled exception in analyzer",
+                "error": str(e)
+            }, 1)
+        except Exception:
+            # If json_exit itself fails, ensure we still exit non-zero
+            sys.exit(1)
