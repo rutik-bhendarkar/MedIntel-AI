@@ -1,4 +1,6 @@
 let GoogleGenerativeAI = null;
+let genAI = null;
+const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 
 try {
   ({ GoogleGenerativeAI } = require("@google/generative-ai"));
@@ -6,9 +8,19 @@ try {
   console.warn("Gemini SDK is not installed. AI enhancement will use local fallback responses.");
 }
 
-const genAI = GoogleGenerativeAI && process.env.GEMINI_API_KEY
-  ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-  : null;
+if (GoogleGenerativeAI && process.env.GEMINI_API_KEY) {
+  try {
+    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    console.log("Gemini model:", MODEL_NAME);
+  } catch (err) {
+    console.error("Failed to initialize GoogleGenerativeAI:", err && err.stack ? err.stack : err);
+    genAI = null;
+  }
+} else {
+  if (!process.env.GEMINI_API_KEY) {
+    console.warn("GEMINI_API_KEY is not set; Gemini disabled.");
+  }
+}
 
 function getModel() {
   if (!genAI || !process.env.GEMINI_API_KEY) {
@@ -16,7 +28,7 @@ function getModel() {
   }
 
   return genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
+    model: MODEL_NAME,
   });
 }
 
@@ -89,13 +101,18 @@ If a follow-up question is provided and emergency is No, end with that question 
 Otherwise, explain what the pattern suggests, give 2-3 safe next steps, and include when to seek care.
 `;
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text().trim();
+    try {
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text().trim();
 
-    return text || null;
+      return text || null;
+    } catch (err) {
+      console.error("Gemini generateContent failed:", err && err.stack ? err.stack : err);
+      return null;
+    }
   } catch (error) {
-    console.error("Gemini reasoning error:", error.message);
+    console.error("Gemini reasoning error:", error && error.stack ? error.stack : error);
     return null;
   }
 }
@@ -131,13 +148,18 @@ Rules:
 - Return only the question.
 `;
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text().trim();
+    try {
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text().trim();
 
-    return text || null;
+      return text || null;
+    } catch (err) {
+      console.error("Gemini generateContent failed:", err && err.stack ? err.stack : err);
+      return null;
+    }
   } catch (error) {
-    console.error("Gemini follow-up error:", error.message);
+    console.error("Gemini follow-up error:", error && error.stack ? error.stack : error);
     return null;
   }
 }
@@ -182,27 +204,18 @@ Provide:
 Keep response under 150 words.
 `;
 
-        const result =
-            await model.generateContent(
-                prompt
-            );
-
-        const response =
-            await result.response;
-
-        return response
-            .text()
-            .trim();
-
-    } catch (error) {
-
-        console.log(
-            "Gemini Report Insight Error:",
-            error.message
-        );
-
+        try {
+          const result = await model.generateContent(prompt);
+          const response = await result.response;
+          return response.text().trim();
+        } catch (err) {
+          console.error("Gemini generateContent failed:", err && err.stack ? err.stack : err);
+          return null;
+        }
+      } catch (error) {
+        console.error("Gemini Report Insight Error:", error && error.stack ? error.stack : error);
         return null;
-    }
+      }
 }
 
 module.exports = {
